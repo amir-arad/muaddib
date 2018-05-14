@@ -1,0 +1,17 @@
+{
+  "repository": "git@github.com:wixplosives/muadib.git",
+  "license": "unlicensed",
+  "private": true,
+  "scripts": {
+    "install": "lerna bootstrap --hoist",
+    "clean": "lerna run clean --stream",
+    "build": "lerna run build --stream",
+    "test": "lerna run test --stream -- --colors",
+    "start": "node server"
+  },
+  "devDependencies": {
+    "lerna": "^2.11.0",
+    "ts-node": "^6.0.0",
+    "typescript": "~2.8.3"
+  }
+}

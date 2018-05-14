@@ -1,0 +1,28 @@
+const path = require('path');
+const glob = require("glob");
+const testFiles = glob.sync('./dist/test/**/*.spec.browser.js?(x)');
+
+const distPath = path.join(__dirname, 'dist');
+
+const testsSetup = [path.join(__dirname, 'dist', 'test', 'setup.js')];
+module.exports = {
+    // mode: 'development',
+    devtool: 'eval',
+    entry: {
+        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`))
+    },
+    output: {
+        path: distPath,
+        filename: '[name].bundle.js',
+        libraryTarget: 'umd',
+        pathinfo: true
+    },
+    devServer: {
+        contentBase: distPath,
+        inline: true,
+        hot: false
+    },
+    module: {
+        noParse: [/\.min\.js$/, /\.bundle\.js$/]
+    }
+};
