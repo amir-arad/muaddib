@@ -1,7 +1,9 @@
 {
   "lerna": "2.11.0",
   "packages": [
-    "simple-link"
+    "app",
+    "simple-link",
+    "devtools"
   ],
   "version": "0.0.0"
 }
