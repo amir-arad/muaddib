@@ -11,11 +11,12 @@ For instance An “Add Component” panel plugin can actually be composed of:
 - Backend (node/worker) code for inserting a component to the code model
 - Wix-curated component service
 
-Allowing any team in wix create each of these parts will allow us to create small teams that sit well with wix philosophy.
+Allowing any team in wix to create each of these parts will allow us to create small teams that sit well with wix philosophy.
 
 These plugins APIs for use in other plugins ( for instance the Files plugin exposes a store of available per file actions)
 
 ## Core concepts
+
 #### Feature plugins
 A group of plugins registered together to achieve a feature
 

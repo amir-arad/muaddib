@@ -1,5 +1,5 @@
 # Plugin Example
-this document outlines the registration and life-cycle of a multi scope "feature plugin" as a way to show the different possible plugin types.
+This document outlines the registration and life-cycle of a multi scope "feature plugin" as a way to show the different possible plugin types.
 
 in this case a simple plugin that shows a render count for each react component in a panel
 
@@ -18,7 +18,7 @@ import { CreateElementVisitorRegistry, CreateElementVisitorRegistryKey} from 'ed
 
 import { Types, CounterStore } from './counter-plugin.types.ts';
 
-EditorLoader.definePlugin('counter-plugin', (
+export const CounterPlugin = EditorLoader.definePlugin(Types.counterPlugin, (
     @inject(PanelRegistryKey) panelRegistry:PanelRegistry,
     @inject(StoreRegistryKey) storeRegistry:StoreRegistry,
     @inject(CreateElementVisitorRegistryKey) createElementVisitorRegistry:CreateElementVisitorRegistry
@@ -35,7 +35,6 @@ the types used as the interface across plugins should be registered in a separat
 this allows them to be used as injectables
 
 ```ts
-import {Registry, Channel} from 'editor-core';
 
 export interface CounterStore{
     count(previewId:string, componentId:string):void;
@@ -44,6 +43,7 @@ export interface CounterStore{
 }
 
 export const types = {
+    counterPlugin : Registry.getUniqueKey('counterPlugin'),
     counterStore : Registry.getUniqueKey('CounterStore'),
     counterPanel :  Registry.getUniqueKey('CounterPanel'),
     counterCreateElementVisitor :  Registry.getUniqueKey('counterCreateElementVisitor'),
@@ -139,6 +139,7 @@ the preview plugin fragment will send count messages to the store
 
 import {injectable, inject, CreateElementVisitor} from 'editor-core';
 import {TYPES, CounterStore} from './counter-plugin.types.ts';
+
 
 @injectable(TYPES.counterPanel)
 export CounterVisitor extends CreateElementVistor{
