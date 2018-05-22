@@ -1,11 +1,11 @@
 # Plugin hooks
 
 
-there are many places where we want to add plugins
+there are many types of plugins
 
 
 - panel
-- re-runnable action
+- command
 - language support (compiler and dependencies)
 - language support ( intellisense )
 - ts compiler transformer

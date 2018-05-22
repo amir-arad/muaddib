@@ -1,4 +1,4 @@
-# Plugin lifecycle
+# Plugin Example
 this document outlines the registration and life-cycle of a multi scope "feature plugin" as a way to show the different possible plugin types.
 
 in this case a simple plugin that shows a render count for each react component in a panel
