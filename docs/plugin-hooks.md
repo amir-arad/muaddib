@@ -6,6 +6,8 @@ there are many types of plugins
 
 
 
+- backend-service
+- main-service
 - panel
 - serializable command
 - language support (compiler and dependencies)
@@ -16,7 +18,6 @@ there are many types of plugins
 - preview renderer ( react and stylable for starters )
 - preview overlay plugin
 - preview element overlay plugin
-- store
 - backend extra language service (such as add node)
 - add panel plugins
 - property panel plugins
@@ -28,14 +29,14 @@ each of these have their own APIs for plugability and enviornment considirations
 ### Backend scope
 
 Backend code can be run either in worker or node. this means neither DOM APIs or nodejs APIS are available.
+specific plugins that need nodeJS enviornemt can register only for it, but they should offer a worker version as a fallback
 
 ### Main scope
 
 Main scope code runs in the browser window.
 
-that means the editor and all its plugins share the same thread
+that means the editor and all its plugins share the same thread.
 
-- this code must not be CPU intensive
 - all plugins and the editor must use the same version for all 3rd party singleton libraries (aka React)
 
 
@@ -45,7 +46,6 @@ user scope code runs in the same iframe as the users code
 
 - we need to keep this code down to a minimum
 - this code must not be CPU intensive
-- we must limit this codes use of 3rd party libraries
 - we must not allow this code to use singleton 3rd party libraries ( aka react);
 
 ## plugin APIS
@@ -63,10 +63,8 @@ panels are react components with few extra capabilities:
 
 #### considrations when writing a panel:
 
- - Some panels are singleton ( filesystem ), some are multiton ( code editor ).
- - singleton panels need to expose commands for setting their state (FileSystemPanel.focusFile)
- - multiton panels need to handle parameters as part of opening/focusing them. (openCodeEditor('../index.tsx')), these parameters need to be their unique id
- - **do we see any exampe of multiton not centered around a file? ( maybe preview is cenetered on export? )**
+ - When defining a panel we must consider what ID should be considered when deciding wether to focus an existing instance or open a new one ( code editor tabs are focused instead of opened when its the same file path, filepanel is always focused )
+ - **do we see any exampe of multi instance panel not centered around a file? ( maybe preview is cenetered on export? )**
 
 ### **SerializableCommands**
 

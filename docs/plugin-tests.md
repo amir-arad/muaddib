@@ -46,50 +46,34 @@ our panel integration tests will reuse our store.
 
 import {PanelTypes} from 'editor-panels';
 import {EditorRunner} from 'editor-test-runner';
-import { Types } from './counter-plugin.types';
+import { CounterTypes } from './counter-plugin.types';
 
 describe('counter panel',()=>{
     it(' starts with 0',()=>{
         //will run the editor with only these plugins
         const editor = await EditorRunner.run({
-            plugins:[Types.CounterPlugin,PanelTypes.panelPlugin]
+            plugins:[CounterTypes.CounterPlugin,PanelTypes.PanelPlugin]
         });
         const injectables = await editor.get(
-            Types.counterStore,
-            Types.counterPanel,
+            CounterTypes.counterStore,
             PanelTypes.panelManager);
 
-
-        expect(injectables[Types.counterPanel]).to.includeHTML('myComp : 0')
+        const panel = await injectables[PanelTypes.panelManager].getPanel(CounterTypes.counterPanel);
+        expect(panel.to.includeHTML('myComp : 0')
     });
     it(' updates ',()=>{
          const editor = await EditorRunner.run({
             plugins:[Types.CounterPlugin,PanelTypes.panelPlugin]
         });
         const injectables = await editor.get(
-            Types.counterStore,
-            Types.counterPanel,
+            CounterTypes.counterStore,
+            CounterTypes.counterPanel,
             PanelTypes.panelManager);
 
-        injectables[Types.counterStore].count('previewA','myComp');
-
-        expect(injectables[Types.counterPanel]).to.includeHTML('myComp : 1')
+        const panel = await injectables[PanelTypes.panelManager].getPanel(CounterTypes.counterPanel);
+        expect(panel.to.includeHTML('myComp : 1')
     });
 
-    it(' resets ',()=>{
-         const editor = await EditorRunner.run({
-            plugins:[Types.CounterPlugin,PanelTypes.panelPlugin]
-        });
-        const injectables = await editor.get(
-            Types.counterStore,
-            Types.counterPanel,
-            PanelTypes.panelManager);
-
-        injectables[Types.counterStore].count('previewA','myComp');
-        stSimulate(injectables[Types.counterPanel],'.reset-button').click();
-
-        expect(injectables[Types.counterPanel]).to.includeHTML('myComp : 0')
-    });
 })
 
 

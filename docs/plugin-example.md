@@ -9,8 +9,7 @@ in this case a simple plugin that shows a render count for each react component 
 the plugin index is a file telling the editor what plugin parts to load:
 
 ```ts
-import {inject} from 'editor-core';
-import EditorLoader from 'editor-loader';
+import {inject, PluginRegistry} from 'editor-core';
 import { PanelRegistry, PanelRegistryKey} from 'editor-panels';
 import { StoreRegistry, StoreRegistryKey} from 'editor-stores';
 import { CreateElementVisitorRegistry, CreateElementVisitorRegistryKey} from 'editor-preview';
@@ -18,7 +17,7 @@ import { CreateElementVisitorRegistry, CreateElementVisitorRegistryKey} from 'ed
 
 import { Types, CounterStore } from './counter-plugin.types.ts';
 
-export const CounterPlugin = EditorLoader.definePlugin(Types.counterPlugin, (
+export const CounterPlugin = PluginRegistry.definePlugin(Types.counterPlugin, (
     @inject(PanelRegistryKey) panelRegistry:PanelRegistry,
     @inject(StoreRegistryKey) storeRegistry:StoreRegistry,
     @inject(CreateElementVisitorRegistryKey) createElementVisitorRegistry:CreateElementVisitorRegistry
@@ -95,12 +94,12 @@ the plugin main will show the data
 
 ```tsx
 
-import {injectable, inject} from 'editor-core';
+import {injectable, inject, pluggable} from 'editor-core';
+import {BasePanel} from 'editor-panels';
 import {TYPES, CounterStore} from './counter-plugin.types.ts';
 
-@injectable(TYPES.counterPanel)
+@injectable(TYPES.CounterPanel)
 export CounterPanel extends BasePanel{
-
     constructor(
         @inject(TYPES.CounterStore) counterStore: CounterStore
     ){}
@@ -122,7 +121,6 @@ export CounterPanel extends BasePanel{
                 })
             }
         </div>
-
     }
 }
 
