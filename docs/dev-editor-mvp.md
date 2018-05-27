@@ -14,16 +14,28 @@ the MVP editor allows creating Applications hosted on wix-cloud. it can run loca
 
 ## Deployments
 
- - Hosted over git FS and wix cloud
+ - Hosted
+     - over git FS
+     - uses wix-cloud for node user spaces?
  - local - over fs or IDE fs
 
 
 ## Editor CLI interface
-- allows running editor on project
+editor can be run as a command prompt over a user project in FS
 - allows reading/changing files
 - allows running user code in a node-user-scope
 - allows deploying user code
 - allows extracting meta-data from user project
+    - meta-data store is filled by running user written metadata code
+    - where possible meta-data store will be moved to be filled from automated static scanning of user code
+    - meta-data fields per module export:
+        - title
+        - description
+        - type ( used for choosing preview renderer )
+        - props simulations ( for type component )
+        - available styles ( for type component )
+        - TBD - props json schema ( for type component )
+        - TBD - arguments json schema ( for type function )
 
 ## GUI-Editor
 
@@ -31,6 +43,12 @@ the MVP editor allows creating Applications hosted on wix-cloud. it can run loca
 
 the GUI editor reflects the user files in a number of ways:
 - react components are hot-reloaded.
+
+it also has some GUI state
+- open panels
+- preview panels state
+    - focused preview panel
+    - element selection
 
 ### File-panel
 - allows running file centric commands
@@ -46,7 +64,8 @@ the GUI editor reflects the user files in a number of ways:
 - allows highlighting elements
 
 ### style panel
-
+component variants are component styles saved in an st.css file.
+this panel works on current focused preview panel ( and selection inside it )
 - allows editing component variants
 - creating new variants
 - choosing from existing variants
@@ -70,8 +89,12 @@ the GUI editor reflects the user files in a number of ways:
 # Sub MVP possible products to release
 
 ## stylable style editor
-
+allows the studio and UX to manage component styles
  - does not handle adding components
+ - does not handle hosting/deploying
+ - does not run node-code-scopes
+ - no code editor
+ - no meta-file creation and editing
 
  ## local editor
 
