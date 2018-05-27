@@ -34,8 +34,8 @@ editor can be run as a command prompt over a user project in FS
         - type ( used for choosing preview renderer )
         - props simulations ( for type component )
         - available styles ( for type component )
-        - TBD - props json schema ( for type component )
-        - TBD - arguments json schema ( for type function )
+        - TBD -props json schema ( for type component )
+        - TBD -arguments json schema ( for type function )
 
 ## GUI-Editor
 
