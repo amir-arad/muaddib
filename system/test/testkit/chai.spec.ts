@@ -12,8 +12,9 @@ const _expect: SinonSpy & typeof chai.expect = spy(chai.expect) as any;
 const assert = (chai as any).Assertion.prototype.assert = spy((chai as any).Assertion.prototype.assert);
 
 declare namespace assertNoError {
-    function forget():void;
+    function forget(): void;
 }
+
 function assertNoError() {
     // sometimes (like when running inside expect()) the last array element is undefined
     const exceptions = assert.exceptions.filter(Boolean);
@@ -22,38 +23,58 @@ function assertNoError() {
         throw exceptions.pop();
     }
 }
-assertNoError.forget = function forget(){
+
+assertNoError.forget = function forget() {
     assert.resetHistory();
 };
+let noiseCount = 0;
 
-export function plan(count: number, testCase: (this: ITestCallbackContext) => void | Promise<any>, timeout = DEFAULT_TIMEOUT) {
-    return async function (this: ITestCallbackContext) {
-        _expect.resetHistory();
-        if (this) {
-            this.timeout(timeout * 1000);
-        } else {
-            console.warn('plan should execute in mocha context');
-        }
+function callCount() {
+    return _expect.callCount - noiseCount;
+}
+
+export async function makePlan(count: number, testCase: (this: never) => (void | Promise<any>), timeout?: number): Promise<void>;
+export async function makePlan(this: ITestCallbackContext, count: number, testCase: (this: ITestCallbackContext) => (void | Promise<any>), timeout?: number): Promise<void>;
+export async function makePlan(this: ITestCallbackContext | never, count: number, testCase: (this: ITestCallbackContext | never) => (void | Promise<any>), timeout = DEFAULT_TIMEOUT): Promise<void> {
+    const preCount = noiseCount;
+    noiseCount = _expect.callCount;
+    try {
         const start = Date.now();
         const waitForCount = (async () => {
-            while (_expect.callCount < count) {
+            while (callCount() < count) {
                 assertNoError();
                 if ((Date.now() - start) > (timeout - NO_TESTS_GRACE)) {
-                    throw new Error(`only ${_expect.callCount} tests done out of ${count} planned`);
+                    throw new Error(`only ${callCount()} tests done out of ${count} planned`);
                 }
                 await delayedPromise(10);
             }
             assertNoError();
         })();
         await Promise.all([testCase.apply(this), waitForCount]);
-        if (_expect.callCount > count) {
-            throw new Error(`${_expect.callCount} tests done but only ${count} planned`);
+        if (callCount() > count) {
+            throw new Error(`${callCount()} tests done but only ${count} planned`);
         }
         await delayedPromise(NO_TESTS_GRACE);
-        if (_expect.callCount > count) {
-            throw new Error(`${_expect.callCount} tests done but only ${count} planned`);
+        if (callCount() > count) {
+            throw new Error(`${callCount()} tests done but only ${count} planned`);
         }
         assertNoError();
+    } finally {
+        noiseCount = preCount + count;
+    }
+}
+
+export function plan(count: number, testCase: (this: ITestCallbackContext) => void | Promise<any>, timeout = DEFAULT_TIMEOUT) {
+    return async function (this: ITestCallbackContext) {
+        // this is a root-level plan
+        _expect.resetHistory();
+        noiseCount = 0;
+        if (this) {
+            this.timeout(timeout * 1000);
+        } else {
+            console.warn('plan should execute in mocha context');
+        }
+        await makePlan.call(this, count, testCase, timeout);
     }
 }
 
@@ -64,8 +85,102 @@ export function obj(seed: any) {
 }
 
 describe("chai testkit", function () {
+
+    const SUB_TIMEOUT = 10;
+
+    function assertOnce() {
+        expect(3).to.equal(3);
+    }
+
+
     beforeEach(() => {
         assert.resetHistory();
+    });
+    describe("makePlan", function () {
+        it("runs the test (and succeeds when 0 assertions as planned)", async function () {
+            let executed = false;
+            await makePlan(0, () => {
+                executed = true;
+            });
+            await expect(executed).to.equal(true);
+        });
+        it("succeeds when 1 assertion as planned", async function () {
+            await makePlan(1, assertOnce);
+        });
+        it("waits for assertion and succeeds even if assertion is after promise", async function () {
+            await makePlan(1, () => {
+                // this will execute after the plan finishes
+                setTimeout(() => assertOnce(), SUB_TIMEOUT);
+            });
+        });
+        it("fails when too many assertions", async function () {
+            const thrown = await makePlan(0, () => {
+                assertOnce(); // the plan was for 0 tests, this should fail
+            }).catch((e: Error) => e) as Error;
+            expect(thrown).to.be.instanceof(Error);
+            expect(thrown.message).to.equal('1 tests done but only 0 planned');
+        });
+        it("fails when too few assertions", async function () {
+            const thrown = await makePlan(1, () => {
+            }, 10).catch((e: Error) => e) as Error;
+            expect(thrown).to.be.instanceof(Error);
+            expect(thrown.message).to.equal('only 0 tests done out of 1 planned');
+        });
+        it("waits for assertion and succeeds even if assertion is after promise", async function () {
+            await makePlan(1, () => {
+                // this will execute after the plan finishes
+                setTimeout(() => assertOnce(), SUB_TIMEOUT);
+            });
+        });
+        it("supports multiple serial plans", async function () {
+            await makePlan(2, () => {
+                assertOnce();
+                assertOnce();
+            });
+            await makePlan(1, assertOnce);
+        });
+        describe('nested plans', () => {
+            it("succeeds with no tests", async function () {
+                await makePlan(0, async () => makePlan(0, () => void 0));
+            });
+            it("succeeds with tests", async function () {
+                await makePlan(2, async () => {
+                    assertOnce();
+                    await makePlan(1, assertOnce);
+                    assertOnce();
+                });
+            });
+            it("failswhen nesting plan has too many tests", async function () {
+                const thrown = await makePlan(1, async () => {
+                    assertOnce();
+                    await makePlan(0, () => void 0);
+                    assertOnce();
+                }).catch((e: Error) => e) as Error;
+                expect(thrown).to.be.instanceof(Error);
+                expect(thrown.message).to.equal('2 tests done but only 1 planned');
+            });
+            it("fails when nesting plan has too few tests", async function () {
+                const thrown = await makePlan(1, async () => {
+                    await makePlan(0, () => void 0);
+                }, SUB_TIMEOUT).catch((e: Error) => e) as Error;
+                expect(thrown).to.be.instanceof(Error);
+                expect(thrown.message).to.equal('only 0 tests done out of 1 planned');
+            });
+            it("fails when nested plan has too many tests", async function () {
+                const thrown = await makePlan(0, async () => {
+                    await makePlan(0, assertOnce);
+                }).catch((e: Error) => e) as Error;
+                expect(thrown).to.be.instanceof(Error);
+                expect(thrown.message).to.equal('1 tests done but only 0 planned');
+            });
+            it("fails when nested plan has too few tests", async function () {
+                const thrown = await makePlan(0, async () => {
+                    await makePlan(1, () => void 0, SUB_TIMEOUT);
+                }).catch((e: Error) => e) as Error;
+                expect(thrown).to.be.instanceof(Error);
+                expect(thrown.message).to.equal('only 0 tests done out of 1 planned');
+            });
+        });
     });
     describe("plan", function () {
         it("runs the test (and succeeds when 0 assertions as planned)", async function () {
@@ -77,15 +192,15 @@ describe("chai testkit", function () {
             await expect(executed).to.equal(true);
         });
         it("succeeds when 1 assertion as planned", plan(1, () => {
-            expect(3).to.equal(3);
+            assertOnce();
         }));
         it("waits for assertion and succeeds even if assertion is after promise", plan(1, () => {
             // this will execute after the plan finishes
-            setTimeout(() => expect(3).to.equal(3), DEFAULT_TIMEOUT / 2);
+            setTimeout(() => assertOnce(), SUB_TIMEOUT);
         }));
         it("fails when too many assertions", async function () {
             const thePlan = plan(0, () => {
-                expect(3).to.equal(3); // the plan was for 0 tests, this should fail
+                assertOnce(); // the plan was for 0 tests, this should fail
             }).bind(this);
             const thrown = await thePlan().catch((e: Error) => e);
             expect(thrown).to.be.instanceof(Error);
@@ -101,7 +216,7 @@ describe("chai testkit", function () {
         it("waits for too many assertions and fails even if assertion is after promise", async function () {
             const thePlan = plan(0, () => {
                 // this will execute after the plan finishes
-                setTimeout(() => expect(3).to.equal(3), NO_TESTS_GRACE / 2);
+                setTimeout(() => assertOnce(), NO_TESTS_GRACE / 2);
             }, 10).bind(this);
             const thrown = await thePlan().catch((e: Error) => e);
             expect(thrown).to.be.instanceof(Error);
@@ -118,7 +233,7 @@ describe("chai testkit", function () {
         it("assertion error has priority over plan error", async function () {
             const error = new Error('foo');
             const thePlan = plan(0, () => {
-                expect(3).to.equal(3); // the plan was for 0 tests, this should fail
+                assertOnce(); // the plan was for 0 tests, this should fail
                 throw error;
             }).bind(this);
             const thrown = await thePlan().catch((e: Error) => e);
@@ -130,7 +245,7 @@ describe("chai testkit", function () {
             expect(assertNoError).to.not.throw();
         });
         it("does not throw when no assertion error", function () {
-            expect(3).to.equal(3);
+            assertOnce();
             expect(assertNoError).to.not.throw();
         });
         it("throws original error when exists", function () {
