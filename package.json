@@ -2,10 +2,15 @@
   "repository": "git@github.com:wixplosives/muadib.git",
   "license": "unlicensed",
   "private": true,
-  "workspaces": [
-    "simple-link",
-    "infra"
-  ],
+  "workspaces": {
+    "packages": [
+      "simple-link",
+      "system"
+    ],
+    "nohoist" : [
+      "**/@types/socket.io*", "**/@types/socket.io*/**", "**/@types/node"
+    ]
+  },
   "scripts": {
     "reset": "yarn clean && rimraf node_modules && yarn install && yarn test",
     "clean": "lerna run clean --stream",

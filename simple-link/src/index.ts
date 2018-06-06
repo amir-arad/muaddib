@@ -1,15 +1,5 @@
+import {Serializable} from "./serializeable";
 
-export type Primitive = string | number | boolean | null | undefined;
-
-export interface SerializableArray {
-    [key: number]: Serializable
-}
-
-export interface SerializableObj {
-    [key: string]: Serializable
-}
-
-export type Serializable = SerializableObj | SerializableArray | Primitive;
 
 export type ExposableAPI = {}
 
@@ -146,7 +136,7 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
     let proxyCreated = false;
     let remoteApi:RemoteApiData
     remoteApi = await new Promise<RemoteApiData>((resolveConnection) => {
-        
+
         config.target.addEventListener('message', (event: MessageEvent) => {
             const payload: Message = extractMessage(event);
             if (payload.senderId !== config.otherSideId) {
@@ -174,7 +164,7 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
             senderId: config.thisSideId
         });
     });
-    
+
     connections.push({
         config,
         localApi: wrappedOfferedApi,
@@ -187,7 +177,7 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
 function post<M extends Message>(config: ConnectionConfig, message: M) {
     try {
         config.target.postMessage(message as any);
-        
+
         //  console.log(config.thisSideId + '->' + config.otherSideId + ':', message.type, (message as any).target || (message as any).description || '')//JSON.stringify(message, null, 4))
         //  console.log(config.thisSideId + '->' + config.otherSideId + ':', message.type, JSON.stringify(message, null, 4))
     } catch (err) {

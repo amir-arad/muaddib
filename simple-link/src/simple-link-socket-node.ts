@@ -1,6 +1,7 @@
 import * as socketIo  from 'socket.io';
-import { Endpoint, Serializable } from "./index";
+import { Endpoint } from "./index";
 import { serialize, deserialize } from './serializer';
+import {Serializable} from "./serializeable";
 
 
 function isEventListenerObject(obj: any): obj is EventListenerObject {
