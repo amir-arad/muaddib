@@ -26,7 +26,6 @@
     "@types/sinon-chai": "~2.7.28",
     "chai": "~4.1.0",
     "chai-as-promised": "^7.1.1",
-    "chai-subset": "~1.6.0",
     "cross-var": "^1.1.0",
     "glob": "~7.1.2",
     "lerna": "^2.11.0",
