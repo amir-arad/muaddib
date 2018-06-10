@@ -2,10 +2,10 @@ import {System} from "./index";
 
 export interface ActorRef<T> {
     address: Address;
-
-    forward(message: Message<T>): void;
-
-    tell(message: Message<T>, sender?: ActorRef<any>): void;
+    //
+    // forward(message: Message<T>): void;
+    //
+    // tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
 console.log()
 

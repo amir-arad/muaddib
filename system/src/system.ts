@@ -36,17 +36,13 @@ class ActorRefImpl<T> implements ActorRef<T> {
     constructor(private system: System, public address: Address) {
     }
 
-    forward(message: Message<T>) {
-        this.system.send(this.address, message, message.from);
-    }
-
-    tell(message: Message<T>, sender?: ActorRef<any>) {
-        this.system.send(this.address, message, sender);
-    }
-}
-
-function isActorRef(subj?: Address | ActorRef<any>): subj is ActorRef<any> {
-    return Boolean(subj && (subj as any).address);
+    // forward(message: Message<T>) {
+    //     this.system.send(this.address, message, message.from);
+    // }
+    //
+    // tell(message: Message<T>, sender?: ActorRef<any>) {
+    //     this.system.send(this.address, message, sender);
+    // }
 }
 
 interface InternalActorContext<T> extends ActorContext<T>{
@@ -69,13 +65,8 @@ export class System {
         }
     }
 
-    // send(to: Address, body: Serializable): void;
-    // send(to: Address, body: Serializable, from: Address): void;
-    // send(to: Address, body: Serializable, from: ActorRef<any>): void;
-    send<T extends Serializable>(to: Address | ActorRef<T>, body: T, from?: Address | ActorRef<any>) {
-        const toAddr = isActorRef(to) ? to.address : to;
-        const fromAddr = isActorRef(from) ? from.address : from;
-        this.sendMessage({to: toAddr, body, from: fromAddr});
+    send<T extends Serializable>(to: ActorRef<T>, body: T, from?: ActorRef<any>) {
+        this.sendMessage({to: to.address, body, from: from && from.address});
     }
 
     actorOf(ctor: ActorConstructor<void>): Promise<ActorRef<any>>;

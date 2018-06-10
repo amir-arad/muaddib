@@ -10,16 +10,15 @@ export class Mailbox {
     private static counter = 0;
 
     public readonly incoming: Observable<Serializable>;
-    public send: (to: Address, body: Serializable) => void;
-    public address: Address;
+    public send: <T extends Serializable>(to: ActorRef<T>, body: T) => void;
 
     constructor(system: System, id?: string) {
         const incoming = new Subject<Serializable>();
-        this.address = id || 'Mailbox:' + (Mailbox.counter++);
+        const address = id || 'Mailbox:' + (Mailbox.counter++);
         this.incoming = incoming;//.pipe(delay(0));
-        const self = system.actorFor(this.address);
-        this.send = <T extends Serializable>(to: Address | ActorRef<T>, body: T) => system.send(to, body, self);
-        system.actorOf(MailboxActor, {address: this.address, incoming});
+        const self = system.actorFor(address);
+        this.send = <T extends Serializable>(to: ActorRef<T>, body: T) => system.send(to, body, self);
+        system.actorOf(MailboxActor, {address, incoming});
     }
 
     /**
@@ -31,9 +30,9 @@ export class Mailbox {
     }
 
     // TODO: remove the default `any` result type
-    ask(to: Address, body: Serializable, resMatcher?: (m: any) => boolean): Promise<any>;
-    ask<R extends Serializable>(to: Address, body: Serializable, resMatcher?: (m: any) => m is R): Promise<R>;
-    ask(to: Address, body: Serializable, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
+    ask<T extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: any) => boolean): Promise<any>;
+    ask<T extends Serializable, R extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: any) => m is R): Promise<R>;
+    ask<T extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
         const res = this.incoming.pipe(first(resMatcher)).toPromise();
         this.send(to, body);
         return res;
