@@ -1,4 +1,4 @@
-import {Actor, ActorContext, Address, Message, Serializable} from "./types";
+import {Actor, ActorContext, ActorRef, Address, Message, Serializable} from "./types";
 import {System} from "./index";
 import {first} from 'rxjs/operators';
 import {Observable, Subject} from "rxjs";
@@ -17,7 +17,8 @@ export class Mailbox {
         const incoming = new Subject<Message<any>>();
         this.address = id || 'Mailbox:' + (Mailbox.counter++);
         this.incoming = incoming;//.pipe(delay(0));
-        this.send = (to: Address, body: Serializable) => (system as any).sendMessage({to, body, from: this.address});
+        const self = system.actorFor(this.address);
+        this.send = <T extends Serializable>(to: Address | ActorRef<T>, body: T) => system.send(to, body, self);
         system.actorOf(MailboxActor, {address: this.address, incoming});
     }
 
@@ -36,18 +37,18 @@ export class Mailbox {
     }
 }
 
-class MailboxActor implements Actor<any> {
+class MailboxActor<M extends Serializable> implements Actor<M> {
     static address(p: { address: Address }) {
         return p.address;
     }
 
-    private incoming: Subject<Message<any>>;
+    private incoming: Subject<Message<M>>;
 
-    constructor(public ctx: ActorContext, p: { incoming: Subject<Message<any>> }) {
+    constructor(public ctx: ActorContext<M>, p: { incoming: Subject<Message<M>> }) {
         this.incoming = p.incoming;
     }
 
-    onReceive(message: Message<any>) {
+    onReceive(message: Message<M>) {
         this.incoming.next(message);
     }
 }

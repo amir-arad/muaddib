@@ -1,16 +1,25 @@
 import {System} from "./index";
 
+export interface ActorRef<T> {
+    address : Address;
 
-export interface ActorContext {
-    system: System;
-    address: Address;
-    send: (to: Address, body: Serializable) => void;
+    forward(message: Message<T>): void;
+
+    tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
 
-export interface ActorConstructor<P = void> {
+export interface ActorContext<T> {
+    system: System;
+   // address: Address;
+    self: ActorRef<T>;
+    from?: ActorRef<any>;
+    send: <T1>(to: ActorRef<T1>, body: T1) => void;
+}
+
+export interface ActorConstructor<P = void, M = any> {
     address: P extends void ? Address : (props: P) => Address;
 
-    new(ctx: ActorContext, props: P): Actor<any>
+    new(ctx: ActorContext<M>, props: P): Actor<any>
 }
 
 export interface Actor<M extends Serializable> {

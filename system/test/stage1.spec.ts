@@ -23,16 +23,16 @@ describe('system', () => {
                 static address = 'greeter';
                 greeting = "";
 
-                constructor(private ctx: ActorContext) {
+                constructor(private ctx: ActorContext<WhoToGreet | Greet>) {
                 }
 
                 onReceive(message: Message<WhoToGreet | Greet>) {
                     const {body, from} = message;
                     if (body.type === 'WhoToGreet') {
                         this.greeting = "hello, " + body.who;
-                    } else if (body.type === 'Greet' && from) {
+                    } else if (body.type === 'Greet' && this.ctx.from) {
                         // Send the current greeting back to the sender
-                        this.ctx.send(from, {type: 'Greeting', message: this.greeting});
+                        this.ctx.send(this.ctx.from, {type: 'Greeting', message: this.greeting});
                     } else {
                         console.error(new Error('dropped message').stack);
                     }
@@ -97,7 +97,7 @@ describe('system', () => {
 
                 balance: number;
 
-                constructor(private ctx: ActorContext, {balance}: { balance: number }) {
+                constructor(private ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, {balance}: { balance: number }) {
                     this.balance = balance;
                 }
 
@@ -113,8 +113,8 @@ describe('system', () => {
                             // simulate async processing
                             await randomDelay();
                             this.balance += body.delta;
-                        } else if (body.type === 'CheckBalance' && from) {
-                            this.ctx.send(from, {type: 'Balance', balance: this.balance});
+                        } else if (body.type === 'CheckBalance' && this.ctx.from) {
+                            this.ctx.send(this.ctx.from, {type: 'Balance', balance: this.balance});
                         } else {
                             console.error(new Error('dropped message').stack);
                         }
@@ -123,12 +123,12 @@ describe('system', () => {
                         // negative balance is an invalid state
                         if (this.balance < 0) {
                             this.balance = oldBalance;
-                            if (from && reference) {    // notify failure
-                                this.ctx.send(from, {type: 'Rejected', reference});
+                            if (this.ctx.from && reference) {    // notify failure
+                                this.ctx.send(this.ctx.from, {type: 'Rejected', reference});
                             }
                         } else if (this.balance != oldBalance) {
-                            if (from && reference) { // notify success
-                                this.ctx.send(from, {type: 'Succeeded', reference});
+                            if (this.ctx.from && reference) { // notify success
+                                this.ctx.send(this.ctx.from, {type: 'Succeeded', reference});
                             }
                         }
                     }
@@ -183,7 +183,7 @@ describe('system', () => {
                 class Bank implements Actor<OpenAccount | Transfer | CheckBalance> {
                     static address = 'bank';
 
-                    constructor(private ctx: ActorContext) {
+                    constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance>) {
                     }
 
                     async onReceive(message: Message<OpenAccount | Transfer | CheckBalance>) {
