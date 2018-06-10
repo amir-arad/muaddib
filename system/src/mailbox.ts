@@ -31,9 +31,9 @@ export class Mailbox {
     }
 
     // TODO: remove the default `any` result type
-    reqRes(to: Address, body: Serializable, resMatcher?: (m: any) => boolean): Promise<any>;
-    reqRes<R extends Serializable>(to: Address, body: Serializable, resMatcher?: (m: any) => m is R): Promise<R>;
-    reqRes(to: Address, body: Serializable, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
+    ask(to: Address, body: Serializable, resMatcher?: (m: any) => boolean): Promise<any>;
+    ask<R extends Serializable>(to: Address, body: Serializable, resMatcher?: (m: any) => m is R): Promise<R>;
+    ask(to: Address, body: Serializable, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
         const res = this.incoming.pipe(first(resMatcher)).toPromise();
         this.send(to, body);
         return res;
