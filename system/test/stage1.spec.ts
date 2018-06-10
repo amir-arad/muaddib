@@ -33,7 +33,7 @@ describe('system', () => {
                         // Send the current greeting back to the sender
                         this.ctx.send(this.ctx.from, {type: 'Greeting', message: this.greeting});
                     } else {
-                        console.error(new Error('dropped message').stack);
+                        this.ctx.unhandled();
                     }
                 }
             }
@@ -47,19 +47,14 @@ describe('system', () => {
             // Create the "actor-in-a-box"
             const mailbox = new Mailbox(system);
 
-            // catch the next message that will arrive at the mailbox
-            let message = mailbox.getNext();
-
-            // Ask the 'greeter for the latest 'greeting'
-            // Reply should go to the "actor-in-a-box"
-            mailbox.send(Greeter.address, {type: 'Greet'});
+            // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
+            let message = mailbox.reqRes(Greeter.address, {type: 'Greet'});
             expect(await message, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
 
             // Change the greeting and ask for it again
             system.send(Greeter.address, {type: 'WhoToGreet', who: 'system'});
 
-            message = mailbox.getNext();
-            mailbox.send(Greeter.address, {type: 'Greet'});
+            message = mailbox.reqRes(Greeter.address, {type: 'Greet'});
             expect(await message, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
         }));
         describe('the bank example', () => {
@@ -114,7 +109,7 @@ describe('system', () => {
                         } else if (msg.type === 'CheckBalance' && this.ctx.from) {
                             this.ctx.send(this.ctx.from, {type: 'Balance', balance: this.balance});
                         } else {
-                            console.error(new Error('dropped message').stack);
+                            this.ctx.unhandled();
                         }
                     } finally {
                         const reference = (msg as any).reference;
@@ -135,7 +130,7 @@ describe('system', () => {
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
                 const system = new System();
-                system.log.subscribe(m => console.log(JSON.stringify(m)));
+                // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 await system.actorOf(Account, {id: 'alice', balance: 0});
                 const alice = Account.address({id: 'alice'});
@@ -193,7 +188,7 @@ describe('system', () => {
                         } else if (msg.type === 'Transfer') {
                             this.transfer(msg, this.ctx.from);
                         } else {
-                            console.error(new Error('dropped message').stack);
+                            this.ctx.unhandled();
                         }
                     }
 
@@ -216,7 +211,7 @@ describe('system', () => {
                             // report rejection
                             from && this.ctx.system.send(from, deductionResult);
                         } else {
-                            console.error(new Error('dropped message').stack);
+                            this.ctx.unhandled();
                         }
                     }
                 }

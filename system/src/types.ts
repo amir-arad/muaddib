@@ -7,8 +7,14 @@ export interface ActorRef<T> {
 
     tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
+console.log()
 
 export interface ActorContext<T> {
+    log : {
+        log(...args:any[]):void;
+    };
+    message:Message<any>;
+    unhandled:()=> void;
     system: System;
     // address: Address;
     self: ActorRef<T>;

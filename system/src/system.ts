@@ -11,10 +11,25 @@ interface MessageSent {
     message: Message<any>;
 }
 
+interface LogEvent {
+    type: 'LogEvent';
+    source: Address;
+    message: any[];
+}
+
+interface UnhandledMessage {
+    type: 'UnhandledMessage';
+    source: Address;
+    message: Message<any>;
+    stack?: string;
+}
+
 interface ActorCreated {
     type: 'ActorCreated';
     address: Address;
 }
+
+type SystemLogEvents = MessageSent | ActorCreated | LogEvent | UnhandledMessage;
 
 // WIP, may not be a class
 class ActorRefImpl<T> implements ActorRef<T> {
@@ -39,7 +54,7 @@ function isActorRef(subj?: Address | ActorRef<any>): subj is ActorRef<any> {
 export class System {
     private actorRefs: { [a: string]: ActorRef<any> } = {};
     private localActors: { [a: string]: ActorInfo } = {};
-    public readonly log = new Subject<MessageSent | ActorCreated>();
+    public readonly log = new Subject<SystemLogEvents>();
 
     protected sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
@@ -74,7 +89,7 @@ export class System {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        return this.startActor<P>(ctor, address, props).then(() =>  this.actorFor(address))
+        return this.startActor<P>(ctor, address, props).then(() => this.actorFor(address))
     }
 
     actorFor(addr: Address): ActorRef<any> {
@@ -89,10 +104,23 @@ export class System {
         // wiring
         const system = this;
         const inbox = new Subject<Message<any>>();
+        // TODO: a class should be more efficient
         const context = {
-            self : this.actorFor(address),
+            log: {
+                log: (...args: any[]) => this.log.next({type: 'LogEvent', source: address, message: args})
+            },
+            message: undefined as any,
+            unhandled: () => {
+                this.log.next({
+                    type: 'UnhandledMessage',
+                    source: address,
+                    message: context.message,
+                    stack: new Error('unhandled message').stack
+                })
+            },
+            self: this.actorFor(address),
             system,
-            send: <T1>(to: ActorRef<T1>, body: T1) => system.sendMessage({to : to.address, body, from: address})
+            send: <T1>(to: ActorRef<T1>, body: T1) => system.sendMessage({to: to.address, body, from: address})
         } as ActorContext<any>;
         // actor lifecycle
         const actor = new ctor(context, props!);
@@ -104,11 +132,13 @@ export class System {
         // TODO allow actor to add custom rxjs operators for its mailbox
         const actorHandleMessage = async (m: Message<any>) => {
             try {
-                if ( typeof m.from === 'string'){
+                context.message = m;
+                if (typeof m.from === 'string') {
                     context.from = this.actorFor(m.from)
                 }
                 return await actor.onReceive(m.body) || emptyArr;
             } finally {
+                context.message = undefined as any;
                 context.from = undefined;
             }
         };
