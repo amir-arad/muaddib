@@ -9,12 +9,12 @@ import {Observable, Subject} from "rxjs";
 export class Mailbox {
     private static counter = 0;
 
-    public readonly incoming: Observable<Message<any>>;
+    public readonly incoming: Observable<Serializable>;
     public send: (to: Address, body: Serializable) => void;
     public address: Address;
 
     constructor(system: System, id?: string) {
-        const incoming = new Subject<Message<any>>();
+        const incoming = new Subject<Serializable>();
         this.address = id || 'Mailbox:' + (Mailbox.counter++);
         this.incoming = incoming;//.pipe(delay(0));
         const self = system.actorFor(this.address);
@@ -30,8 +30,11 @@ export class Mailbox {
         return this.incoming.pipe(first()).toPromise();
     }
 
-    reqRes<R extends Message<any>>(to: Address, body: Serializable, resMatcher?: (m: Message<any>) => boolean): Promise<R> {
-        const res = this.incoming.pipe(first(resMatcher)).toPromise() as Promise<R>;
+    // TODO: remove the default `any` result type
+    reqRes(to: Address, body: Serializable, resMatcher?: (m: any) => boolean): Promise<any>;
+    reqRes<R extends Serializable>(to: Address, body: Serializable, resMatcher?: (m: any) => m is R): Promise<R>;
+    reqRes(to: Address, body: Serializable, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
+        const res = this.incoming.pipe(first(resMatcher)).toPromise();
         this.send(to, body);
         return res;
     }
@@ -42,13 +45,13 @@ class MailboxActor<M extends Serializable> implements Actor<M> {
         return p.address;
     }
 
-    private incoming: Subject<Message<M>>;
+    private incoming: Subject<M>;
 
-    constructor(public ctx: ActorContext<M>, p: { incoming: Subject<Message<M>> }) {
+    constructor(public ctx: ActorContext<M>, p: { incoming: Subject<M> }) {
         this.incoming = p.incoming;
     }
 
-    onReceive(message: Message<M>) {
+    onReceive(message: M) {
         this.incoming.next(message);
     }
 }

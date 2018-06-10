@@ -1,5 +1,5 @@
 import {expect, plan} from "./testkit/chai.spec";
-import {Actor, ActorContext, Address, Mailbox, Message, System} from "../src";
+import {Actor, ActorContext, ActorRef, Mailbox, System} from "../src";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, Math.random() * 10));
@@ -26,11 +26,10 @@ describe('system', () => {
                 constructor(private ctx: ActorContext<WhoToGreet | Greet>) {
                 }
 
-                onReceive(message: Message<WhoToGreet | Greet>) {
-                    const {body, from} = message;
-                    if (body.type === 'WhoToGreet') {
-                        this.greeting = "hello, " + body.who;
-                    } else if (body.type === 'Greet' && this.ctx.from) {
+                onReceive(msg: WhoToGreet | Greet) {
+                    if (msg.type === 'WhoToGreet') {
+                        this.greeting = "hello, " + msg.who;
+                    } else if (msg.type === 'Greet' && this.ctx.from) {
                         // Send the current greeting back to the sender
                         this.ctx.send(this.ctx.from, {type: 'Greeting', message: this.greeting});
                     } else {
@@ -54,14 +53,14 @@ describe('system', () => {
             // Ask the 'greeter for the latest 'greeting'
             // Reply should go to the "actor-in-a-box"
             mailbox.send(Greeter.address, {type: 'Greet'});
-            expect((await message).body, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
+            expect(await message, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
 
             // Change the greeting and ask for it again
             system.send(Greeter.address, {type: 'WhoToGreet', who: 'system'});
 
             message = mailbox.getNext();
             mailbox.send(Greeter.address, {type: 'Greet'});
-            expect((await message).body, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
+            expect(await message, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
         }));
         describe('the bank example', () => {
             interface ChangeBalance {
@@ -101,25 +100,24 @@ describe('system', () => {
                     this.balance = balance;
                 }
 
-                async onReceive(message: Message<ChangeBalance | CheckBalance | SetBalance>) {
-                    const {body, from} = message;
+                async onReceive(msg: ChangeBalance | CheckBalance | SetBalance) {
                     const oldBalance = this.balance;
                     try {
-                        if (body.type === 'SetBalance') {
+                        if (msg.type === 'SetBalance') {
                             // simulate async processing
                             await randomDelay();
-                            this.balance = body.balance;
-                        } else if (body.type === 'ChangeBalance') {
+                            this.balance = msg.balance;
+                        } else if (msg.type === 'ChangeBalance') {
                             // simulate async processing
                             await randomDelay();
-                            this.balance += body.delta;
-                        } else if (body.type === 'CheckBalance' && this.ctx.from) {
+                            this.balance += msg.delta;
+                        } else if (msg.type === 'CheckBalance' && this.ctx.from) {
                             this.ctx.send(this.ctx.from, {type: 'Balance', balance: this.balance});
                         } else {
                             console.error(new Error('dropped message').stack);
                         }
                     } finally {
-                        const reference = (body as any).reference;
+                        const reference = (msg as any).reference;
                         // negative balance is an invalid state
                         if (this.balance < 0) {
                             this.balance = oldBalance;
@@ -148,16 +146,16 @@ describe('system', () => {
                     type: 'ChangeBalance',
                     delta: 150,
                     reference: 'fooo'
-                }, res => res.body.type === 'Succeeded');
+                }, res => res.type === 'Succeeded');
 
-                let balanceMsg = mailbox.reqRes(alice, {type: 'CheckBalance'}, res => res.body.type === 'Balance');
-                expect((await balanceMsg).body, '1st balance').to.have.property('balance', 150);
+                let balanceMsg = mailbox.reqRes(alice, {type: 'CheckBalance'}, res => res.type === 'Balance');
+                expect(await balanceMsg, '1st balance').to.have.property('balance', 150);
 
                 system.send(alice, {type: 'ChangeBalance', delta: -100});
                 system.send(alice, {type: 'SetBalance', balance: 123});
 
-                balanceMsg = mailbox.reqRes(alice, {type: 'CheckBalance'}, res => res.body.type === 'Balance');
-                expect((await balanceMsg).body, '2nd balance').to.have.property('balance', 123);
+                balanceMsg = mailbox.reqRes(alice, {type: 'CheckBalance'}, res => res.type === 'Balance');
+                expect(await balanceMsg, '2nd balance').to.have.property('balance', 123);
             }));
 
             it('plugins lazy loading, prototype and singleton', plan(6, async () => {
@@ -186,38 +184,37 @@ describe('system', () => {
                     constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance>) {
                     }
 
-                    async onReceive(message: Message<OpenAccount | Transfer | CheckBalance>) {
-                        const {body, from} = message;
-                        if (body.type === 'OpenAccount') {
-                            await this.ctx.system.actorOf(Account, {id: body.name, balance: body.balance});
-                        } else if (body.type === 'CheckBalance' && from) {
+                    async onReceive(msg: OpenAccount | Transfer | CheckBalance) {
+                        if (msg.type === 'OpenAccount') {
+                            await this.ctx.system.actorOf(Account, {id: msg.name, balance: msg.balance});
+                        } else if (msg.type === 'CheckBalance' && this.ctx.from) {
                             // forward the request to the account actor
-                            this.ctx.system.send(Account.address({id: body.name}), {type: 'CheckBalance'}, from);
-                        } else if (body.type === 'Transfer') {
-                            this.transfer(body, from);
+                            this.ctx.system.send(Account.address({id: msg.name}), {type: 'CheckBalance'}, this.ctx.from);
+                        } else if (msg.type === 'Transfer') {
+                            this.transfer(msg, this.ctx.from);
                         } else {
                             console.error(new Error('dropped message').stack);
                         }
                     }
 
-                    private async transfer(body: Transfer, from?: Address) {
+                    private async transfer(msg: Transfer, from?: ActorRef<any>) {
                         // create a new actor address to manage the transfer
-                        const manager = new Mailbox(this.ctx.system, `Transfer:${body.reference}`);
+                        const manager = new Mailbox(this.ctx.system, `Transfer:${msg.reference}`);
                         // send deduction request to the 'from' side
-                        const deductionResult = await manager.reqRes(Account.address({id: body.from}), {
+                        const deductionResult = await manager.reqRes(Account.address({id: msg.from}), {
                             type: 'ChangeBalance',
-                            reference: body.reference,
-                            delta: -body.amount
+                            reference: msg.reference,
+                            delta: -msg.amount
                         });
-                        if (deductionResult.body.type === 'Succeeded') {
-                            this.ctx.system.send(Account.address({id: body.to}), {
+                        if (deductionResult.type === 'Succeeded') {
+                            this.ctx.system.send(Account.address({id: msg.to}), {
                                 type: 'ChangeBalance',
-                                delta: body.amount,
-                                reference: body.reference
+                                delta: msg.amount,
+                                reference: msg.reference
                             }, from);
-                        } else if (deductionResult.body.type === 'Rejected') {
+                        } else if (deductionResult.type === 'Rejected') {
                             // report rejection
-                            from && this.ctx.system.send(from, deductionResult.body);
+                            from && this.ctx.system.send(from, deductionResult);
                         } else {
                             console.error(new Error('dropped message').stack);
                         }
@@ -228,13 +225,13 @@ describe('system', () => {
                     const aliceBalanceMsg = mailbox.reqRes(Bank.address, {
                         type: 'CheckBalance',
                         name: 'Alice'
-                    }, res => res.body.type === 'Balance');
-                    expect((await aliceBalanceMsg).body, `Alice balance ${msg}`).to.have.property('balance', alice);
+                    }, res => res.type === 'Balance');
+                    expect(await aliceBalanceMsg, `Alice balance ${msg}`).to.have.property('balance', alice);
                     const bobBalanceMsg = mailbox.reqRes(Bank.address, {
                         type: 'CheckBalance',
                         name: 'Bob'
-                    }, res => res.body.type === 'Balance');
-                    expect((await bobBalanceMsg).body, `Bob balance ${msg}`).to.have.property('balance', bob);
+                    }, res => res.type === 'Balance');
+                    expect(await bobBalanceMsg, `Bob balance ${msg}`).to.have.property('balance', bob);
                 }
 
                 const system = new System();
@@ -250,7 +247,7 @@ describe('system', () => {
                     reference: 'first',
                     to: 'Bob',
                     amount: 60
-                }, res => res.body.type === 'Succeeded');
+                }, res => res.type === 'Succeeded');
                 await assertBalances(40, 60, 'after transfer');
                 await mailbox.reqRes(Bank.address, {
                     type: 'Transfer',
@@ -258,7 +255,7 @@ describe('system', () => {
                     reference: 'second',
                     to: 'Bob',
                     amount: 60
-                }, res => res.body.type === 'Rejected');
+                }, res => res.type === 'Rejected');
                 await assertBalances(40, 60, 'after rejected transfer');
             }));
         });

@@ -107,7 +107,7 @@ export class System {
                 if ( typeof m.from === 'string'){
                     context.from = this.actorFor(m.from)
                 }
-                return await actor.onReceive(m) || emptyArr;
+                return await actor.onReceive(m.body) || emptyArr;
             } finally {
                 context.from = undefined;
             }

@@ -1,7 +1,7 @@
 import {System} from "./index";
 
 export interface ActorRef<T> {
-    address : Address;
+    address: Address;
 
     forward(message: Message<T>): void;
 
@@ -10,7 +10,7 @@ export interface ActorRef<T> {
 
 export interface ActorContext<T> {
     system: System;
-   // address: Address;
+    // address: Address;
     self: ActorRef<T>;
     from?: ActorRef<any>;
     send: <T1>(to: ActorRef<T1>, body: T1) => void;
@@ -26,7 +26,7 @@ export interface Actor<M extends Serializable> {
 
     init?: () => void | Promise<void>;
 
-    onReceive(message: Message<M>): void | Promise<void>;
+    onReceive(message: M): void | Promise<void>;
 }
 
 export type Address = string;
