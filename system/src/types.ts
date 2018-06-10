@@ -17,7 +17,7 @@ export interface ActorContext<T> {
     system: System;
     // address: Address;
     self: ActorRef<T>;
-    from?: ActorRef<any>;
+    replyTo?: ActorRef<any>;
     send: <T1>(to: ActorRef<T1>, body: T1) => void;
 }
 
@@ -41,7 +41,7 @@ export interface Serializable {
 }
 
 export interface Message<T extends Serializable> {
-    from?: Address;
+    replyTo?: Address;
     to: Address;
     body: T;
 }

@@ -29,9 +29,9 @@ describe('system', () => {
                 onReceive(msg: WhoToGreet | Greet) {
                     if (msg.type === 'WhoToGreet') {
                         this.greeting = "hello, " + msg.who;
-                    } else if (msg.type === 'Greet' && this.ctx.from) {
+                    } else if (msg.type === 'Greet' && this.ctx.replyTo) {
                         // Send the current greeting back to the sender
-                        this.ctx.send(this.ctx.from, {type: 'Greeting', message: this.greeting});
+                        this.ctx.send(this.ctx.replyTo, {type: 'Greeting', message: this.greeting});
                     } else {
                         this.ctx.unhandled();
                     }
@@ -106,8 +106,8 @@ describe('system', () => {
                             // simulate async processing
                             await randomDelay();
                             this.balance += msg.delta;
-                        } else if (msg.type === 'CheckBalance' && this.ctx.from) {
-                            this.ctx.send(this.ctx.from, {type: 'Balance', balance: this.balance});
+                        } else if (msg.type === 'CheckBalance' && this.ctx.replyTo) {
+                            this.ctx.send(this.ctx.replyTo, {type: 'Balance', balance: this.balance});
                         } else {
                             this.ctx.unhandled();
                         }
@@ -116,12 +116,12 @@ describe('system', () => {
                         // negative balance is an invalid state
                         if (this.balance < 0) {
                             this.balance = oldBalance;
-                            if (this.ctx.from && reference) {    // notify failure
-                                this.ctx.send(this.ctx.from, {type: 'Rejected', reference});
+                            if (this.ctx.replyTo && reference) {    // notify failure
+                                this.ctx.send(this.ctx.replyTo, {type: 'Rejected', reference});
                             }
                         } else if (this.balance != oldBalance) {
-                            if (this.ctx.from && reference) { // notify success
-                                this.ctx.send(this.ctx.from, {type: 'Succeeded', reference});
+                            if (this.ctx.replyTo && reference) { // notify success
+                                this.ctx.send(this.ctx.replyTo, {type: 'Succeeded', reference});
                             }
                         }
                     }
@@ -130,7 +130,7 @@ describe('system', () => {
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
                 const system = new System();
-                // system.log.subscribe(m => console.log(JSON.stringify(m)));
+                system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 const alice = await system.actorOf(Account, {id: 'alice', balance: 0});
 
@@ -177,18 +177,18 @@ describe('system', () => {
                     async onReceive(msg: OpenAccount | Transfer | CheckBalance) {
                         if (msg.type === 'OpenAccount') {
                             await this.ctx.system.actorOf(Account, {id: msg.name, balance: msg.balance});
-                        } else if (msg.type === 'CheckBalance' && this.ctx.from) {
+                        } else if (msg.type === 'CheckBalance' && this.ctx.replyTo) {
                             // forward the request to the account actor
                             const accountRef = this.ctx.system.actorFor(Account.address({id: msg.name}));
-                            this.ctx.system.send(accountRef, {type: 'CheckBalance'}, this.ctx.from);
+                            this.ctx.system.send(accountRef, {type: 'CheckBalance'}, this.ctx.replyTo);
                         } else if (msg.type === 'Transfer') {
-                            this.transfer(msg, this.ctx.from);
+                            this.transfer(msg, this.ctx.replyTo);
                         } else {
                             this.ctx.unhandled();
                         }
                     }
 
-                    private async transfer(msg: Transfer, from?: ActorRef<any>) {
+                    private async transfer(msg: Transfer, replyTo?: ActorRef<any>) {
                         // create a new actor address to manage the transfer
                         const manager = new Mailbox(this.ctx.system, `Transfer:${msg.reference}`);
                         // send deduction request to the 'from' side
@@ -205,10 +205,10 @@ describe('system', () => {
                                 type: 'ChangeBalance',
                                 delta: msg.amount,
                                 reference: msg.reference
-                            }, from);
+                            }, replyTo);
                         } else if (deductionResult.type === 'Rejected') {
                             // report rejection
-                            from && this.ctx.system.send(from, deductionResult);
+                            replyTo && this.ctx.system.send(replyTo, deductionResult);
                         } else {
                             this.ctx.unhandled();
                         }

@@ -65,8 +65,8 @@ export class System {
         }
     }
 
-    send<T extends Serializable>(to: ActorRef<T>, body: T, from?: ActorRef<any>) {
-        this.sendMessage({to: to.address, body, from: from && from.address});
+    send<T extends Serializable>(to: ActorRef<T>, body: T, replyTo?: ActorRef<any>) {
+        this.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
     }
 
     actorOf(ctor: ActorConstructor<void>): Promise<ActorRef<any>>;
@@ -113,7 +113,7 @@ export class System {
             },
             self: this.actorFor(address),
             system,
-            send: <T1>(to: ActorRef<T1>, body: T1) => system.sendMessage({to: to.address, body, from: address}),
+            send: <T1>(to: ActorRef<T1>, body: T1, replyTo?:ActorRef<any>) => system.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address}),
             message: undefined as any
         } as InternalActorContext<any>;
         // actor lifecycle
@@ -127,13 +127,13 @@ export class System {
         const actorHandleMessage = async (m: Message<any>) => {
             try {
                 context.message = m;
-                if (typeof m.from === 'string') {
-                    context.from = this.actorFor(m.from)
+                if (typeof m.replyTo === 'string') {
+                    context.replyTo = this.actorFor(m.replyTo)
                 }
                 return await actor.onReceive(m.body) || emptyArr;
             } finally {
                 context.message = undefined as any;
-                context.from = undefined;
+                context.replyTo = undefined;
             }
         };
         inbox.pipe(flatMap(actorHandleMessage, CONCURRENT_MESSAGES)).subscribe();

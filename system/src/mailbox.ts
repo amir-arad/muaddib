@@ -45,7 +45,7 @@ class MailboxActor<M extends Serializable> implements Actor<M> {
     }
 
     private incoming: Subject<M>;
-
+// having a Subject as a property couples this actor to the local VM of the Mailbox that created it
     constructor(public ctx: ActorContext<M>, p: { incoming: Subject<M> }) {
         this.incoming = p.incoming;
     }
