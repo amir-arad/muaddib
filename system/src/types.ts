@@ -13,7 +13,6 @@ export interface ActorContext<T> {
     log : {
         log(...args:any[]):void;
     };
-    message:Message<any>;
     unhandled:()=> void;
     system: System;
     // address: Address;

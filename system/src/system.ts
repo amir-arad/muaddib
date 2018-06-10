@@ -49,6 +49,9 @@ function isActorRef(subj?: Address | ActorRef<any>): subj is ActorRef<any> {
     return Boolean(subj && (subj as any).address);
 }
 
+interface InternalActorContext<T> extends ActorContext<T>{
+    message:Message<T>;
+}
 // TODO: actor end of life
 // TODO: supervision
 export class System {
@@ -109,7 +112,6 @@ export class System {
             log: {
                 log: (...args: any[]) => this.log.next({type: 'LogEvent', source: address, message: args})
             },
-            message: undefined as any,
             unhandled: () => {
                 this.log.next({
                     type: 'UnhandledMessage',
@@ -120,8 +122,9 @@ export class System {
             },
             self: this.actorFor(address),
             system,
-            send: <T1>(to: ActorRef<T1>, body: T1) => system.sendMessage({to: to.address, body, from: address})
-        } as ActorContext<any>;
+            send: <T1>(to: ActorRef<T1>, body: T1) => system.sendMessage({to: to.address, body, from: address}),
+            message: undefined as any
+        } as InternalActorContext<any>;
         // actor lifecycle
         const actor = new ctor(context, props!);
         this.localActors[address] = {inbox, actor};
