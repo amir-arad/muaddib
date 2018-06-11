@@ -44,29 +44,27 @@ describe('system', () => {
             }
 
             const system = new System();
-            // system.log.subscribe(m => console.log(JSON.stringify(m)));
+
             // Create the "actor-in-a-box"
-            await system.actorOf({
-                address: 'testCase',
-                create: async ctx => {
-                    // Create the 'greeter' actor
-                    const greeter = await system.actorOf(Greeter);
-                    // Tell the 'greeter' to change its 'greeting' message
-                    system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
-                    // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
-                    let message = await ctx.ask(greeter, {type: 'Greet'});
-                    expect(message.body, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
+            await system.run(async ctx => {
+                // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
-                    // Change the greeting and ask for it again
-                    system.send(greeter, {type: 'WhoToGreet', who: 'system'});
+                // Create the 'greeter' actor
+                const greeter = await system.actorOf(Greeter);
+                // Tell the 'greeter' to change its 'greeting' message
+                system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
+                // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
+                let message = await ctx.ask(greeter, {type: 'Greet'});
+                expect(message.body, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
 
-                    message = await ctx.ask(greeter, {type: 'Greet'});
-                    expect(message.body, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
+                // Change the greeting and ask for it again
+                system.send(greeter, {type: 'WhoToGreet', who: 'system'});
 
-                    return () => void 0; // return noop message handler
-                }
-            });
+                message = await ctx.ask(greeter, {type: 'Greet'});
+                expect(message.body, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
+            }, 'testCase');
         }));
+
         describe('the bank example', () => {
             interface ChangeBalance {
                 type: 'ChangeBalance';

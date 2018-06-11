@@ -4,6 +4,7 @@ import {
     Actor,
     ActorContext,
     ActorDef,
+    ActorFunction,
     ActorRef,
     Address,
     isActorFactory,
@@ -57,12 +58,32 @@ class ActorRefImpl<T> implements ActorRef<T> {
 interface InternalActorContext<T> extends ActorContext<T> {
     __message: Message<T>;
 }
+
+/**
+ * create a no-operation function actor for given actor context
+ */
+export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
+    return ctx.unhandled.bind(ctx)
+}
+
 // TODO: actor end of life
 // TODO: supervision
 export class System {
     private actorRefs: { [a: string]: ActorRef<any> } = {};
     private localActors: { [a: string]: ActorInfo } = {};
+    private jobCounter = 0;
+
     public readonly log = new Subject<SystemLogEvents>();
+
+    async run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+        await this.actorOf({
+            address: 'run:' + address,
+            create: async ctx => {
+                await script(ctx);
+                return nullActor(ctx); // TODO: kill
+            }
+        });
+    }
 
     protected sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
