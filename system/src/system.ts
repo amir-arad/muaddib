@@ -43,16 +43,8 @@ type SystemLogEvents = MessageSent | ActorCreated | LogEvent | UnhandledMessage;
 
 // WIP, may not be a class
 class ActorRefImpl<T> implements ActorRef<T> {
-    constructor(private system: System, public address: Address) {
+    constructor(public address: Address) {
     }
-
-    // forward(message: Message<T>) {
-    //     this.system.send(this.address, message, message.from);
-    // }
-    //
-    // tell(message: Message<T>, sender?: ActorRef<any>) {
-    //     this.system.send(this.address, message, sender);
-    // }
 }
 
 interface InternalActorContext<T> extends ActorContext<T> {
@@ -119,7 +111,7 @@ export class System {
     actorFor(addr: Address): ActorRef<any> {
         let result = this.actorRefs[addr];
         if (!result) {
-            result = this.actorRefs[addr] = new ActorRefImpl(this, addr);
+            result = this.actorRefs[addr] = new ActorRefImpl(addr);
         }
         return result;
     }
