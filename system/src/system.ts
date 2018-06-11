@@ -127,14 +127,14 @@ export class System {
             system,
             send: <T1>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) =>
                 system.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address}),
-            unsafeAsk: async <T1>(to: ActorRef<T1>, reqBody: T1, options: { id?: string, timeout?: number }): Promise<MessageAndContext<any>> => {
+            ask: async <T1>(to: ActorRef<T1>, reqBody: T1, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>> => {
                 // the actor may be handling a different message when this one returns
                 // TODO: kill?
                 return new Promise<MessageAndContext<any>>(async (resolve, reject) => {
                     // time out the entire operation
-                    setTimeout(() => reject(new Error('request timed out')), options.timeout || 1000);
+                    setTimeout(() => reject(new Error('request timed out')), options && options.timeout || 1000);
                     // make an actor that will receive the reply
-                    const replyAddress = address + '/Asking:' + (options.id || jobCounter++);
+                    const replyAddress = address + '/asking:' + (options && options.id || jobCounter++);
                     const replyActorRef = await this.actorOf({
                         address: replyAddress,
                         create: (ctx: InternalActorContext<any>) => (body: M) => {
@@ -151,16 +151,12 @@ export class System {
             },
             __message: undefined as any
         };
-        // actor lifecycle
-        const actor = await (isActorFactory(ctor) ? ctor.create(context, props!) : new ctor(context, props!));
-        this.localActors[address] = {inbox, actor};
-        this.log.next({type: 'ActorCreated', address});
         // TODO allow actor to add custom rxjs operators for its mailbox
         const actorHandleMessage = async (m: Message<any>) => {
             try {
                 context.__message = m;
                 if (typeof m.replyTo === 'string') {
-                    context.replyTo = this.actorFor(m.replyTo)
+                    context.replyTo = this.actorFor(m.replyTo);
                 }
                 const actorResult = typeof actor === 'function' ? actor(m.body) : actor.onReceive(m.body);
                 return await actorResult || emptyArr;
@@ -170,6 +166,11 @@ export class System {
             }
         };
         inbox.pipe(flatMap(actorHandleMessage, CONCURRENT_MESSAGES)).subscribe();
+
+        // actor lifecycle
+        const actor = await (isActorFactory(ctor) ? ctor.create(context, props!) : new ctor(context, props!));
+        this.localActors[address] = {inbox, actor};
+        this.log.next({type: 'ActorCreated', address});
     }
 }
 

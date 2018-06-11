@@ -1,6 +1,5 @@
-import {Actor, ActorContext, ActorObject, ActorRef, Address, Message, Serializable} from "./types";
+import {ActorContext, ActorRef, Serializable} from "./types";
 import {System} from "./index";
-import {first} from 'rxjs/operators';
 import {Observable, Subject} from "rxjs";
 
 /**
@@ -10,51 +9,22 @@ export class Mailbox {
     private static counter = 0;
 
     public readonly incoming: Observable<Serializable>;
-    public send: <T extends Serializable>(to: ActorRef<T>, body: T) => void;
+    public readonly ctx!: ActorContext<Serializable>;
 
     constructor(system: System, id?: string) {
         const incoming = new Subject<Serializable>();
         const address = id || 'Mailbox:' + (Mailbox.counter++);
         this.incoming = incoming;//.pipe(delay(0));
-        const self = system.actorFor(address);
-        this.send = <T extends Serializable>(to: ActorRef<T>, body: T) => system.send(to, body, self);
-        system.actorOf(MailboxActor, {address, incoming});
+        system.actorOf({
+            address,
+            create: ctx => {
+                (this as any).ctx = ctx;
+                return (msg: Serializable) => incoming.next(msg);
+            }
+        });
     }
 
-    /**
-     * catch the next message that will arrive at the mailbox
-     * @returns {Promise<any>}
-     */
-    getNext() {
-        return this.incoming.pipe(first()).toPromise();
-    }
-
-    // TODO: remove the default `any` result type
-    ask<T extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: any) => boolean): Promise<any>;
-    ask<T extends Serializable, R extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: any) => m is R): Promise<R>;
-    ask<T extends Serializable>(to: ActorRef<T>, body: T, resMatcher?: (m: Serializable) => boolean): Promise<Serializable> {
-        const res = this.incoming.pipe(first(resMatcher)).toPromise();
-        this.send(to, body);
-        return res;
-    }
-}
-
-class MailboxActor<M extends Serializable> implements ActorObject<M> {
-    static address(p: { address: Address }) {
-        return p.address;
-    }
-
-    static create<M extends Serializable>(ctx: ActorContext<M>, p : { incoming: Subject<M> }){
-        return new this(ctx, p);
-    }
-
-    private incoming: Subject<M>;
-// having a Subject as a property couples this actor to the local VM of the Mailbox that created it
-    constructor(private ctx: ActorContext<M>, p: { incoming: Subject<M> }) {
-        this.incoming = p.incoming;
-    }
-
-    onReceive(message: M) {
-        this.incoming.next(message);
+    async ask<T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }): Promise<Serializable> {
+        return (await this.ctx.ask(to, body, options)).body;
     }
 }

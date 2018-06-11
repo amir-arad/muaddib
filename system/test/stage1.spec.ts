@@ -1,5 +1,5 @@
 import {expect, plan} from "./testkit/chai.spec";
-import {Actor, ActorContext, ActorRef, Mailbox, System} from "../src";
+import {ActorContext, ActorRef, Mailbox, System} from "../src";
 import {ActorObject, MessageAndContext} from "../src/types";
 
 function randomDelay() {
@@ -44,23 +44,28 @@ describe('system', () => {
             }
 
             const system = new System();
-            // Create the 'greeter' actor
-            const greeter = await system.actorOf(Greeter);
-            // Tell the 'greeter' to change its 'greeting' message
-            system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
-
+            // system.log.subscribe(m => console.log(JSON.stringify(m)));
             // Create the "actor-in-a-box"
-            const mailbox = new Mailbox(system);
+            await system.actorOf({
+                address: 'testCase',
+                create: async ctx => {
+                    // Create the 'greeter' actor
+                    const greeter = await system.actorOf(Greeter);
+                    // Tell the 'greeter' to change its 'greeting' message
+                    system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
+                    // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
+                    let message = await ctx.ask(greeter, {type: 'Greet'});
+                    expect(message.body, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
 
-            // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
-            let message = mailbox.ask(greeter, {type: 'Greet'});
-            expect(await message, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
+                    // Change the greeting and ask for it again
+                    system.send(greeter, {type: 'WhoToGreet', who: 'system'});
 
-            // Change the greeting and ask for it again
-            system.send(greeter, {type: 'WhoToGreet', who: 'system'});
+                    message = await ctx.ask(greeter, {type: 'Greet'});
+                    expect(message.body, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
 
-            message = mailbox.ask(greeter, {type: 'Greet'});
-            expect(await message, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
+                    return () => void 0; // return noop message handler
+                }
+            });
         }));
         describe('the bank example', () => {
             interface ChangeBalance {
@@ -145,7 +150,7 @@ describe('system', () => {
                     type: 'ChangeBalance',
                     delta: 150,
                     reference: 'fooo'
-                }, res => res.type === 'Succeeded');
+                });
 
                 expect(await mailbox.ask(alice, {type: 'CheckBalance'}), '1st balance').to.have.property('balance', 150);
                 system.send(alice, {type: 'ChangeBalance', delta: -100});
@@ -197,7 +202,7 @@ describe('system', () => {
                     private async transfer(msg: Transfer, replyTo?: ActorRef<any>) {
                         // send deduction request to the 'from' side
                         const fromAccountRef = this.ctx.system.actorFor(Account.address({id: msg.from}));
-                        const deductionResult = await this.ctx.unsafeAsk(fromAccountRef, {
+                        const deductionResult = await this.ctx.ask(fromAccountRef, {
                             type: 'ChangeBalance',
                             reference: msg.reference,
                             delta: -msg.amount
@@ -220,19 +225,19 @@ describe('system', () => {
 
 
                 const system = new System();
-                //   system.log.subscribe(m => console.log(JSON.stringify(m)));
+                // system.log.subscribe(m => console.log(JSON.stringify(m)));
                 const bank = await system.actorOf(Bank);
 
                 async function assertBalances(alice: number, bob: number, msg: string) {
                     const aliceBalanceMsg = mailbox.ask(bank, {
                         type: 'CheckBalance',
                         name: 'Alice'
-                    }, res => res.type === 'Balance');
+                    }, {id: `Alice balance ${msg}`});
                     expect(await aliceBalanceMsg, `Alice balance ${msg}`).to.have.property('balance', alice);
                     const bobBalanceMsg = mailbox.ask(bank, {
                         type: 'CheckBalance',
                         name: 'Bob'
-                    }, res => res.type === 'Balance');
+                    }, {id: `Bob balance ${msg}`});
                     expect(await bobBalanceMsg, `Bob balance ${msg}`).to.have.property('balance', bob);
                 }
 
@@ -246,7 +251,7 @@ describe('system', () => {
                     reference: 'first',
                     to: 'Bob',
                     amount: 60
-                })).to.eql({type: 'Succeeded', reference: 'first'});
+                }, {id: 'first transfer'})).to.eql({type: 'Succeeded', reference: 'first'});
                 await assertBalances(40, 60, 'after transfer');
                 expect(await mailbox.ask(bank, {
                     type: 'Transfer',
@@ -254,7 +259,7 @@ describe('system', () => {
                     reference: 'second',
                     to: 'Bob',
                     amount: 60
-                })).to.eql({type: 'Rejected', reference: 'second'});
+                }, {id: 'second transfer'})).to.eql({type: 'Rejected', reference: 'second'});
                 await assertBalances(40, 60, 'after rejected transfer');
             }));
         });
