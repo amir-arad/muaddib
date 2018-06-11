@@ -1,5 +1,6 @@
 import {expect, plan} from "./testkit/chai.spec";
 import {Actor, ActorContext, ActorRef, Mailbox, System} from "../src";
+import {MessageAndContext} from "../src/types";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, Math.random() * 10));
@@ -22,6 +23,10 @@ describe('system', () => {
             class Greeter implements Actor<WhoToGreet | Greet> {
                 static address = 'greeter';
                 greeting = "";
+
+                static create(ctx: ActorContext<WhoToGreet | Greet>) {
+                    return new this(ctx);
+                }
 
                 constructor(private ctx: ActorContext<WhoToGreet | Greet>) {
                 }
@@ -130,7 +135,7 @@ describe('system', () => {
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
                 const system = new System();
-                system.log.subscribe(m => console.log(JSON.stringify(m)));
+                // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 const alice = await system.actorOf(Account, {id: 'alice', balance: 0});
 
@@ -162,7 +167,7 @@ describe('system', () => {
 
                 interface Transfer {
                     type: 'Transfer';
-                    reference: number;
+                    reference: string;
                     from: string;
                     to: string;
                     amount: number;
@@ -182,6 +187,7 @@ describe('system', () => {
                             const accountRef = this.ctx.system.actorFor(Account.address({id: msg.name}));
                             this.ctx.system.send(accountRef, {type: 'CheckBalance'}, this.ctx.replyTo);
                         } else if (msg.type === 'Transfer') {
+                            // don't sync the following operation with this actor
                             this.transfer(msg, this.ctx.replyTo);
                         } else {
                             this.ctx.unhandled();
@@ -189,28 +195,25 @@ describe('system', () => {
                     }
 
                     private async transfer(msg: Transfer, replyTo?: ActorRef<any>) {
-                        // create a new actor address to manage the transfer
-                        const manager = new Mailbox(this.ctx.system, `Transfer:${msg.reference}`);
                         // send deduction request to the 'from' side
                         const fromAccountRef = this.ctx.system.actorFor(Account.address({id: msg.from}));
-
-                        const deductionResult = await manager.ask(fromAccountRef, {
+                        const deductionResult = await this.ctx.unsafeAsk(fromAccountRef, {
                             type: 'ChangeBalance',
                             reference: msg.reference,
                             delta: -msg.amount
-                        });
-                        if (deductionResult.type === 'Succeeded') {
+                        }, `Transfer:${msg.reference}`) as MessageAndContext<Succeeded | Rejected>;
+                        if (deductionResult.body.type === 'Succeeded') {
                             const toAccountRef = this.ctx.system.actorFor(Account.address({id: msg.to}));
                             this.ctx.system.send(toAccountRef, {
                                 type: 'ChangeBalance',
                                 delta: msg.amount,
                                 reference: msg.reference
                             }, replyTo);
-                        } else if (deductionResult.type === 'Rejected') {
+                        } else if (deductionResult.body.type === 'Rejected') {
                             // report rejection
-                            replyTo && this.ctx.system.send(replyTo, deductionResult);
+                            replyTo && this.ctx.system.send(replyTo, deductionResult.body);
                         } else {
-                            this.ctx.unhandled();
+                            deductionResult.unhandled();
                         }
                     }
                 }

@@ -7,30 +7,43 @@ export interface ActorRef<T> {
     //
     // tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
-console.log()
-
-export interface ActorContext<T> {
+export interface MessageContext {
+    unhandled:()=> void;
+    replyTo?: ActorRef<any>;
+}
+export interface MessageAndContext<T extends Serializable> extends MessageContext{
+    body : T;
+}
+export interface ActorContext<T> extends MessageContext{
     log : {
         log(...args:any[]):void;
     };
-    unhandled:()=> void;
     system: System;
-    // address: Address;
     self: ActorRef<T>;
-    replyTo?: ActorRef<any>;
-    send: <T1>(to: ActorRef<T1>, body: T1) => void;
+    send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1) => void;
+    unsafeAsk: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, id?:string) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
+   // ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, id?:string) => Promise<Serializable>;
 }
 
-export interface ActorConstructor<P = void, M = any> {
-    address: P extends void ? Address : (props: P) => Address;
-
-    new(ctx: ActorContext<M>, props: P): Actor<any>
+export interface ActorFactory<P, M> {
+    create(ctx: ActorContext<M>, props: P): Actor<M> | Promise<Actor<M>>;
 }
+
+export interface ActorClass<P, M> {
+    new(ctx: ActorContext<M>, props: P): Actor<M> | Promise<Actor<M>>;
+}
+export function isActorFactory<P, M>(subj : ActorDef<P, M>): subj is ActorFactory<P, M> & ActorMetadata<P>{
+    return typeof (subj as any).create === 'function';
+}
+
+export interface ActorMetadata<P>{
+    address: P extends void ? Address : (props: P) => Address
+}
+
+export type ActorDef<P = void, M = any> = ActorMetadata<P> & (ActorFactory<P, M> | ActorClass<P, M>);
+
 
 export interface Actor<M extends Serializable> {
-
-    init?: () => void | Promise<void>;
-
     onReceive(message: M): void | Promise<void>;
 }
 
