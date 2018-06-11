@@ -21,7 +21,7 @@ export interface ActorContext<T> extends MessageContext{
     system: System;
     self: ActorRef<T>;
     send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1) => void;
-    unsafeAsk: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, id?:string) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
+    unsafeAsk: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options:{ id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
    // ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, id?:string) => Promise<Serializable>;
 }
 
@@ -30,7 +30,7 @@ export interface ActorFactory<P, M> {
 }
 
 export interface ActorClass<P, M> {
-    new(ctx: ActorContext<M>, props: P): Actor<M> | Promise<Actor<M>>;
+    new(ctx: ActorContext<M>, props: P): ActorObject<M>;
 }
 export function isActorFactory<P, M>(subj : ActorDef<P, M>): subj is ActorFactory<P, M> & ActorMetadata<P>{
     return typeof (subj as any).create === 'function';
@@ -42,8 +42,11 @@ export interface ActorMetadata<P>{
 
 export type ActorDef<P = void, M = any> = ActorMetadata<P> & (ActorFactory<P, M> | ActorClass<P, M>);
 
-
-export interface Actor<M extends Serializable> {
+export type Actor<M extends Serializable> = ActorObject<M> | ActorFunction<M>;
+export interface ActorFunction<M extends Serializable> {
+    (message: M): void | Promise<void>;
+}
+export interface ActorObject<M extends Serializable> {
     onReceive(message: M): void | Promise<void>;
 }
 

@@ -1,4 +1,4 @@
-import {Actor, ActorContext, ActorRef, Address, Message, Serializable} from "./types";
+import {Actor, ActorContext, ActorObject, ActorRef, Address, Message, Serializable} from "./types";
 import {System} from "./index";
 import {first} from 'rxjs/operators';
 import {Observable, Subject} from "rxjs";
@@ -39,7 +39,7 @@ export class Mailbox {
     }
 }
 
-class MailboxActor<M extends Serializable> implements Actor<M> {
+class MailboxActor<M extends Serializable> implements ActorObject<M> {
     static address(p: { address: Address }) {
         return p.address;
     }

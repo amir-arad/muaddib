@@ -1,6 +1,6 @@
 import {expect, plan} from "./testkit/chai.spec";
 import {Actor, ActorContext, ActorRef, Mailbox, System} from "../src";
-import {MessageAndContext} from "../src/types";
+import {ActorObject, MessageAndContext} from "../src/types";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, Math.random() * 10));
@@ -20,7 +20,7 @@ describe('system', () => {
                 type: 'Greet';
             }
 
-            class Greeter implements Actor<WhoToGreet | Greet> {
+            class Greeter implements ActorObject<WhoToGreet | Greet> {
                 static address = 'greeter';
                 greeting = "";
 
@@ -89,7 +89,7 @@ describe('system', () => {
                 type: 'CheckBalance';
             }
 
-            class Account implements Actor<ChangeBalance | CheckBalance | SetBalance> {
+            class Account implements ActorObject<ChangeBalance | CheckBalance | SetBalance> {
                 static address({id}: { id: string }) {
                     return `Account:${id}`
                 }
@@ -173,7 +173,7 @@ describe('system', () => {
                     amount: number;
                 }
 
-                class Bank implements Actor<OpenAccount | Transfer | CheckBalance> {
+                class Bank implements ActorObject<OpenAccount | Transfer | CheckBalance> {
                     static address = 'bank';
 
                     constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance>) {
@@ -201,7 +201,7 @@ describe('system', () => {
                             type: 'ChangeBalance',
                             reference: msg.reference,
                             delta: -msg.amount
-                        }, `Transfer:${msg.reference}`) as MessageAndContext<Succeeded | Rejected>;
+                        }, {id: `Transfer:${msg.reference}`}) as MessageAndContext<Succeeded | Rejected>;
                         if (deductionResult.body.type === 'Succeeded') {
                             const toAccountRef = this.ctx.system.actorFor(Account.address({id: msg.to}));
                             this.ctx.system.send(toAccountRef, {
