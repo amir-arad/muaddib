@@ -8,6 +8,10 @@ export interface ActorRef<T> {
     // tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
 
+export interface ChildActorRef<T> extends ActorRef<T> {
+    stop(): void;
+}
+
 export interface MessageContext {
     unhandled: () => void;
     replyTo?: ActorRef<any>;
@@ -25,7 +29,7 @@ export interface ActorContext<T> extends MessageContext {
     self: ActorRef<T>;
     send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) => void;
     ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
-    // ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, id?:string) => Promise<Serializable>;
+    stop():void;
 }
 
 export interface ActorFactory<P, M> {

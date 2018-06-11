@@ -7,6 +7,7 @@ import {
     ActorFunction,
     ActorRef,
     Address,
+    ChildActorRef,
     isActorFactory,
     Message,
     MessageAndContext,
@@ -18,6 +19,11 @@ const CONCURRENT_MESSAGES = 1;
 
 interface MessageSent {
     type: 'MessageSent';
+    message: Message<any>;
+}
+
+interface UndeliveredMessage {
+    type: 'UndeliveredMessage';
     message: Message<any>;
 }
 
@@ -39,11 +45,20 @@ interface ActorCreated {
     address: Address;
 }
 
-type SystemLogEvents = MessageSent | ActorCreated | LogEvent | UnhandledMessage;
+interface ActorDestroyed {
+    type: 'ActorDestroyed';
+    address: Address;
+}
+
+type SystemLogEvents = MessageSent | UndeliveredMessage | UnhandledMessage | ActorCreated | ActorDestroyed | LogEvent;
 
 // WIP, may not be a class
-class ActorRefImpl<T> implements ActorRef<T> {
-    constructor(public address: Address) {
+class ActorRefImpl<T> implements ChildActorRef<T> {
+    constructor(private system: System, public address: Address) {
+    }
+
+    stop(): void {
+        (this.system as any).stopActor(this.address);
     }
 }
 
@@ -58,7 +73,6 @@ export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
     return ctx.unhandled.bind(ctx)
 }
 
-// TODO: actor end of life
 // TODO: supervision
 export class System {
     private actorRefs: { [a: string]: ActorRef<any> } = {};
@@ -67,14 +81,25 @@ export class System {
 
     public readonly log = new Subject<SystemLogEvents>();
 
+    private stopActor(address: Address) {
+        const actor = this.localActors[address];
+        if (actor) {
+            this.log.next({type: 'ActorDestroyed', address});
+            actor.inbox.complete();
+            delete this.localActors[address];
+            // TODO : shutdown hook on actor object
+        }
+    }
+
     async run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        await this.actorOf({
+        const ref = await this.actorOf({
             address: 'run:' + address,
             create: async ctx => {
                 await script(ctx);
-                return nullActor(ctx); // TODO: kill
+                return nullActor(ctx);
             }
         });
+        ref.stop();
     }
 
     protected sendMessage(message: Message<any>) {
@@ -83,6 +108,7 @@ export class System {
         if (localRecepient) {
             localRecepient.inbox.next(message);
         } else {
+            this.log.next({type: 'UndeliveredMessage', message});
             console.error(new Error(`unknown address "${message.to}"`).stack);
         }
     }
@@ -91,9 +117,9 @@ export class System {
         this.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
     }
 
-    actorOf<M>(ctor: ActorDef<void, M>): Promise<ActorRef<M>>;
-    actorOf<P, M>(ctor: ActorDef<P>, props: P): Promise<ActorRef<M>>;
-    actorOf<P, M>(ctor: ActorDef<P>, props?: P): Promise<ActorRef<M>> {
+    actorOf<M>(ctor: ActorDef<void, M>): Promise<ChildActorRef<M>>;
+    actorOf<P, M>(ctor: ActorDef<P>, props: P): Promise<ChildActorRef<M>>;
+    async actorOf<P, M>(ctor: ActorDef<P>, props?: P): Promise<ChildActorRef<M>> {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -105,13 +131,14 @@ export class System {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        return this.startActor<P, M>(ctor, address, props!).then(() => this.actorFor(address))
+        await this.startActor<P, M>(ctor, address, props!);
+        return this.actorFor(address) as ChildActorRef<M>;
     }
 
     actorFor(addr: Address): ActorRef<any> {
         let result = this.actorRefs[addr];
         if (!result) {
-            result = this.actorRefs[addr] = new ActorRefImpl(addr);
+            result = this.actorRefs[addr] = new ActorRefImpl(this, addr);
         }
         return result;
     }
@@ -145,7 +172,10 @@ export class System {
                 // TODO: kill?
                 return new Promise<MessageAndContext<any>>(async (resolve, reject) => {
                     // time out the entire operation
-                    setTimeout(() => reject(new Error('request timed out')), options && options.timeout || 1000);
+                    const timeout = setTimeout(() => {
+                        replyActorRef.stop();
+                        reject(new Error('request timed out'));
+                    }, options && options.timeout || 1000);
                     // make an actor that will receive the reply
                     const replyAddress = address + '/asking:' + (options && options.id || jobCounter++);
                     const replyActorRef = await this.actorOf({
@@ -156,12 +186,15 @@ export class System {
                                 unhandled: () => this.unhandled(replyAddress, ctx.__message),
                                 body
                             });
+                            clearTimeout(timeout);
+                            replyActorRef.stop();
                         }
                     });
                     // send the request with custom replyTo
                     this.send(to, reqBody, replyActorRef);
                 });
             },
+            stop: () => this.stopActor(address),
             __message: undefined as any
         };
         // TODO allow actor to add custom rxjs operators for its mailbox
@@ -182,6 +215,7 @@ export class System {
 
         // actor lifecycle
         const actor = await (isActorFactory(ctor) ? ctor.create(context, props!) : new ctor(context, props!));
+        // TODO : startup hook on actor object
         this.localActors[address] = {inbox, actor};
         this.log.next({type: 'ActorCreated', address});
     }
