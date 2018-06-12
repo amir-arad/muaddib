@@ -3,7 +3,7 @@ import {ActorContext, ActorRef, createActorSystem} from "../src";
 import {ActorObject, MessageAndContext} from "../src/types";
 
 function randomDelay() {
-    return new Promise(resolve => setTimeout(resolve, Math.random() * 10));
+    return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
 }
 
 describe('system', () => {
@@ -94,7 +94,7 @@ describe('system', () => {
                     return `Account:${id}`
                 },
                 async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, props: { balance: number }) {
-                    await new Promise(res => setTimeout(res, 10)); // fake dynamic import
+                    await randomDelay(); // fake dynamic import
                     return new AccountImpl(ctx, props);
                 }
             };
