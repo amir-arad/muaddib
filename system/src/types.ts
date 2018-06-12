@@ -3,6 +3,11 @@ import {Observable} from 'rxjs';
 
 export interface ActorRef<T> {
     address: Address;
+
+    send(body: T, replyTo?: ActorRef<any>): void;
+
+    ask(body: T, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>>;
+
 }
 
 export interface ChildActorRef<T> extends ActorRef<T> {
@@ -25,13 +30,11 @@ export interface ActorSystem {
 }
 
 export interface ActorContext<T> extends MessageContext {
-    log: {
-        log(...args: any[]): void;
-    };
+    log(...args: any[]): void;
 
     self: ActorRef<T>;
-    send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) => void;
-    ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
+    // send <T1>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>): void;
+    // ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
     stop(): void;
 
     actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;

@@ -1,3 +1,2 @@
-export * from './actor-system'
+export {createActorSystem, nullActor} from './actor-system'
 export * from './types'
-export * from './mailbox'

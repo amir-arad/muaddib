@@ -8,34 +8,61 @@ import {
     MessageAndContext,
     Serializable
 } from "./types";
-import {ActorSystemImpl} from "./actor-system";
+import {ActorSystemImpl, BaseActorRef} from "./actor-system";
 
 
 export class ActorContextImpl<M> implements ActorContext<M> {
     private __message?: Message<M>;
     private __jobCounter = 0;
+    private __actorRefs = new WeakMap<BaseActorRef<any>, ChildActorRef<any>>();
 
-    replyTo?: ActorRef<any>;
-    readonly self: ActorRef<M>;
-    readonly log = {
-        log: (...args: any[]): void => this.system.log.next({type: 'LogEvent', source: this.address, message: args})
-    };
+    public replyTo?: ActorRef<any>;
+    public readonly self: ActorRef<M>;
 
     constructor(public readonly system: ActorSystemImpl, private readonly address: Address) {
-        this.self = system.getActorRef(this.address);
+        this.self = this.makeBoundReference(this.address);
+    }
+
+    log(...args: any[]): void {
+        this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     }
 
     actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
     actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
     actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
-        return this.system.createActor<P, M>(ctor, props as P);
+        return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P));
     }
 
     actorFor(addr: Address): ActorRef<any> {
-        return this.system.getActorRef(addr);
+        return this.makeBoundReference(addr);
     }
 
-    ask<T1 extends Serializable>(to: ActorRef<T1>, reqBody: T1, options?: { id?: string; timeout?: number }): Promise<MessageAndContext<any>> {
+    unhandled(): void {
+        if (this.__message) {
+            this.system.unhandled(this.address, this.__message);
+        } else {
+            throw new Error('unexpected : unhandled() called outside of message scope');
+        }
+    }
+
+    stop(): void {
+        this.system.stopActor(this.address);
+    }
+
+    private makeBoundReference<M>(address: Address): ChildActorRef<M> {
+        const baseRef: BaseActorRef<M> = this.system.getBaseActorRef(address);
+        if (this.__actorRefs.has(baseRef)) {
+            return this.__actorRefs.get(baseRef)!;
+        } else {
+            const boundRef = Object.create(baseRef) as ChildActorRef<M>;
+            boundRef.send = (body: M, replyTo?: ActorRef<any>) => this.system.sendMessage({to: baseRef.address, body, replyTo: replyTo && replyTo.address});
+            boundRef.ask = (body: M, options?: { id?: string; timeout?: number }) => this.__ask(baseRef.address, body, options);
+            this.__actorRefs.set(baseRef, boundRef);
+            return boundRef;
+        }
+    }
+
+    private __ask<T1 extends Serializable>(to: Address, reqBody: T1, options?: { id?: string; timeout?: number }): Promise<MessageAndContext<any>> {
         // the actor may be handling a different message when this one returns
         return new Promise<MessageAndContext<any>>(async (resolve, reject) => {
             // time out the entire operation
@@ -51,7 +78,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
                     const message = askContext.__message;
                     if (message) {
                         resolve({
-                            replyTo: askContext.replyTo,
+                            replyTo: askContext.replyTo && this.makeBoundReference(askContext.replyTo.address),
                             unhandled: () => this.system.unhandled(replyAddress, message),
                             body
                         });
@@ -63,30 +90,14 @@ export class ActorContextImpl<M> implements ActorContext<M> {
                 }
             });
             // send the request with custom replyTo
-            this.system.send(to, reqBody, replyActorRef);
+            this.system.sendMessage({to, body: reqBody, replyTo: replyActorRef.address});
         });
-    }
-
-    send<T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>): void {
-        this.system.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
-    }
-
-    unhandled(): void {
-        if (this.__message) {
-            this.system.unhandled(this.address, this.__message);
-        } else {
-            throw new Error('unexpected : unhandled() called outside of message scope');
-        }
-    }
-
-    stop(): void {
-        this.system.stopActor(this.address);
     }
 
     __startMessageScope(m: Message<M>) {
         this.__message = m;
         if (typeof m.replyTo === 'string') {
-            this.replyTo = this.system.getActorRef(m.replyTo);
+            this.replyTo = this.makeBoundReference(m.replyTo);
         }
     }
 

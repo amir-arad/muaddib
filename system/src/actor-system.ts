@@ -6,14 +6,13 @@ import {
     ActorRef,
     ActorSystem,
     Address,
-    ChildActorRef,
     Message,
     Serializable,
     SystemLogEvents
 } from "./types";
 import {ActorManager} from "./actor-manager";
 
-class ActorRefImpl<T> implements ChildActorRef<T> {
+export class BaseActorRef<T> {
     constructor(private system: ActorSystem, public address: Address) {
     }
 
@@ -35,7 +34,7 @@ export function createActorSystem(): ActorSystem {
 
 // TODO: supervision
 export class ActorSystemImpl implements ActorSystem {
-    private actorRefs: { [a: string]: ChildActorRef<any> } = {};
+    private actorRefs: { [a: string]: BaseActorRef<any> } = {}; // TODO: weakmap
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private jobCounter = 0;
 
@@ -52,11 +51,11 @@ export class ActorSystemImpl implements ActorSystem {
 
     run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
         return new Promise(res => {
-            const ref = this.createActor({
+            this.createActor({
                 address: 'run:' + address,
                 create: async ctx => {
                     await script(ctx);
-                    ref.stop();
+                    ctx.stop();
                     res(); // TODO: move to shutdown hook
                     return nullActor(ctx);
                 }
@@ -75,11 +74,7 @@ export class ActorSystemImpl implements ActorSystem {
         }
     }
 
-    send<T extends Serializable>(to: ActorRef<T>, body: T, replyTo?: ActorRef<any>) {
-        this.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
-    }
-
-    createActor<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M> {
+    createActor<P, M>(ctor: ActorDef<P, M>, props: P) {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -93,13 +88,13 @@ export class ActorSystemImpl implements ActorSystem {
         }
         this.localActors[address] = new ActorManager<P, M>(ctor, address, props, this);
         this.log.next({type: 'ActorCreated', address});
-        return this.getActorRef(address);
+        return address;
     }
 
-    getActorRef(addr: Address) {
+    getBaseActorRef(addr: Address) {
         let result = this.actorRefs[addr];
         if (!result) {
-            result = this.actorRefs[addr] = new ActorRefImpl(this, addr);
+            result = this.actorRefs[addr] = new BaseActorRef(this, addr);
         }
         return result;
     }
