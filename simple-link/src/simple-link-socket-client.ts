@@ -1,6 +1,7 @@
 import 'socket.io-client';
-import { Endpoint, Serializable } from './index';
+import { Endpoint } from './index';
 import { serialize, deserialize } from './serializer';
+import {Serializable} from "./serializeable";
 
 export function socketEndpoint(socket : SocketIOClient.Socket): Endpoint {
     const handlers:Map<Function,Function> = new Map();
@@ -17,12 +18,12 @@ export function socketEndpoint(socket : SocketIOClient.Socket): Endpoint {
             handlers.set(handler,wrappedHandler);
             socket.on(type,wrappedHandler);
         },
-        
+
         removeEventListener:(type:'message',handler:(ev:MessageEvent)=>void)=>{
             if(handlers.has(handler)){
                 return socket.off(type,handlers.get(handler));
             }
-            
+
         },
         postMessage: (message: Serializable) => {
             socket.emit('message', {

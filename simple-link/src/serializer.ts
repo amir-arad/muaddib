@@ -1,4 +1,4 @@
-import { Serializable } from "./index";
+import { Serializable } from "./serializeable";
 
 type SerializeTransformer<T, s extends Serializable> = {
     transformerId:string
@@ -18,7 +18,7 @@ const regExTransformer:SerializeTransformer<RegExp,string> = {
     deserialize:(value:string)=>{
         return new RegExp(value);
     }
-} 
+}
 
 
 const registry:SerializeTransformer<any,any>[] = [regExTransformer];
