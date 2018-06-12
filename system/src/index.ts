@@ -1,3 +1,3 @@
-export * from './system'
+export * from './actor-system'
 export * from './types'
 export * from './mailbox'

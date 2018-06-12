@@ -13,7 +13,7 @@ import {
 import {ActorManager} from "./actor-manager";
 
 class ActorRefImpl<T> implements ChildActorRef<T> {
-    constructor(private system: System, public address: Address) {
+    constructor(private system: ActorSystem, public address: Address) {
     }
 
     stop(): void {
@@ -29,7 +29,7 @@ export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
 }
 
 // TODO: supervision, move actorOf to actorContext
-export class System {
+export class ActorSystem {
     private actorRefs: { [a: string]: ActorRef<any> } = {};
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private jobCounter = 0;

@@ -1,5 +1,5 @@
 import {expect, plan} from "./testkit/chai.spec";
-import {ActorContext, ActorRef, Mailbox, System} from "../src";
+import {ActorContext, ActorRef, Mailbox, ActorSystem} from "../src";
 import {ActorObject, MessageAndContext} from "../src/types";
 
 function randomDelay() {
@@ -43,7 +43,7 @@ describe('system', () => {
                 }
             }
 
-            const system = new System();
+            const system = new ActorSystem();
 
             // Create the "actor-in-a-box"
             await system.run(async ctx => {
@@ -146,7 +146,7 @@ describe('system', () => {
             }
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
-                const system = new System();
+                const system = new ActorSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 const alice = system.actorOf(Account, {id: 'alice', balance: 0});
@@ -231,7 +231,7 @@ describe('system', () => {
                 }
 
 
-                const system = new System();
+                const system = new ActorSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
                 const bank = system.actorOf(Bank);
 

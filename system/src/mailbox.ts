@@ -1,5 +1,5 @@
 import {ActorContext, ActorRef, Serializable} from "./types";
-import {System} from "./index";
+import {ActorSystem} from "./index";
 import {Observable, Subject} from "rxjs";
 
 /**
@@ -11,7 +11,7 @@ export class Mailbox {
     public readonly incoming: Observable<Serializable>;
     private readonly ctx!: ActorContext<Serializable>;
 
-    constructor(system: System, id?: string) {
+    constructor(system: ActorSystem, id?: string) {
         const incoming = new Subject<Serializable>();
         const address = id || 'Mailbox:' + (Mailbox.counter++);
         this.incoming = incoming;

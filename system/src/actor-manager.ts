@@ -1,5 +1,5 @@
 import {Actor, ActorDef, Address, isActorFactory, isPromiseLike, Message} from "./types";
-import {System} from "./system";
+import {ActorSystem} from "./actor-system";
 import {ActorContextImpl} from "./actor-context";
 import {flatMap} from 'rxjs/operators';
 import {Subject} from "rxjs";
@@ -11,7 +11,7 @@ export class ActorManager<P, M> {
     private readonly inbox = new Subject<Message<M>>();
     private readonly context: ActorContextImpl<M>;
 
-    constructor(ctor: ActorDef<P, M>, address: Address, props: P, system: System) {
+    constructor(ctor: ActorDef<P, M>, address: Address, props: P, system: ActorSystem) {
         this.context = new ActorContextImpl(system, address);
         const actor = (isActorFactory(ctor) ? ctor.create(this.context, props!) : new ctor(this.context, props!));
         if (isPromiseLike(actor)) {

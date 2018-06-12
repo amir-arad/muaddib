@@ -1,4 +1,4 @@
-import {System} from "./index";
+import {ActorSystem} from "./index";
 
 export interface ActorRef<T> {
     address: Address;
@@ -25,7 +25,7 @@ export interface ActorContext<T> extends MessageContext {
     log: {
         log(...args: any[]): void;
     };
-    system: System;
+    system: ActorSystem;
     self: ActorRef<T>;
     send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) => void;
     ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns

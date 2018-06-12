@@ -1,5 +1,5 @@
 import {ActorContext, ActorRef, Address, Message, MessageAndContext, Serializable} from "./types";
-import {System} from "./system";
+import {ActorSystem} from "./actor-system";
 
 
 export class ActorContextImpl<M> implements ActorContext<M> {
@@ -12,7 +12,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
         log: (...args: any[]): void => this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     };
 
-    constructor(public readonly system: System, private readonly address: Address) {
+    constructor(public readonly system: ActorSystem, private readonly address: Address) {
         this.self = system.actorFor(this.address);
     }
 
