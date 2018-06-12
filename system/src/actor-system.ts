@@ -4,6 +4,7 @@ import {
     ActorDef,
     ActorFunction,
     ActorRef,
+    ActorSystem,
     Address,
     ChildActorRef,
     Message,
@@ -28,9 +29,13 @@ export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
     return ctx.unhandled.bind(ctx)
 }
 
-// TODO: supervision, move actorOf to actorContext
-export class ActorSystem {
-    private actorRefs: { [a: string]: ActorRef<any> } = {};
+export function createActorSystem(): ActorSystem {
+    return new ActorSystemImpl();
+}
+
+// TODO: supervision
+export class ActorSystemImpl implements ActorSystem {
+    private actorRefs: { [a: string]: ChildActorRef<any> } = {};
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private jobCounter = 0;
 
@@ -45,15 +50,18 @@ export class ActorSystem {
         }
     }
 
-    async run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        const ref = await this.actorOf({
-            address: 'run:' + address,
-            create: async ctx => {
-                await script(ctx);
-                return nullActor(ctx);
-            }
+    run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+        return new Promise(res => {
+            const ref = this.createActor({
+                address: 'run:' + address,
+                create: async ctx => {
+                    await script(ctx);
+                    ref.stop();
+                    res(); // TODO: move to shutdown hook
+                    return nullActor(ctx);
+                }
+            }, undefined);
         });
-        ref.stop();
     }
 
     sendMessage(message: Message<any>) {
@@ -71,9 +79,7 @@ export class ActorSystem {
         this.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
     }
 
-    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
+    createActor<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M> {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -85,12 +91,12 @@ export class ActorSystem {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        this.localActors[address] = new ActorManager<P, M>(ctor, address, props as P, this);
+        this.localActors[address] = new ActorManager<P, M>(ctor, address, props, this);
         this.log.next({type: 'ActorCreated', address});
-        return this.actorFor(address) as ChildActorRef<M>;
+        return this.getActorRef(address);
     }
 
-    actorFor(addr: Address): ActorRef<any> {
+    getActorRef(addr: Address) {
         let result = this.actorRefs[addr];
         if (!result) {
             result = this.actorRefs[addr] = new ActorRefImpl(this, addr);
@@ -107,4 +113,3 @@ export class ActorSystem {
         })
     };
 }
-

@@ -1,5 +1,5 @@
 import {expect, plan} from "./testkit/chai.spec";
-import {ActorContext, ActorRef, Mailbox, ActorSystem} from "../src";
+import {ActorContext, ActorRef, createActorSystem, Mailbox} from "../src";
 import {ActorObject, MessageAndContext} from "../src/types";
 
 function randomDelay() {
@@ -43,22 +43,20 @@ describe('system', () => {
                 }
             }
 
-            const system = new ActorSystem();
-
-            // Create the "actor-in-a-box"
+            const system = createActorSystem();
+            // system.log.subscribe(m => console.log(JSON.stringify(m)));
             await system.run(async ctx => {
-                // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 // Create the 'greeter' actor
-                const greeter = system.actorOf(Greeter);
+                const greeter = ctx.actorOf(Greeter);
                 // Tell the 'greeter' to change its 'greeting' message
-                system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
+                ctx.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
                 // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
                 let message = await ctx.ask(greeter, {type: 'Greet'});
                 expect(message.body, '1st message').to.eql({type: 'Greeting', message: 'hello, muadib'});
 
                 // Change the greeting and ask for it again
-                system.send(greeter, {type: 'WhoToGreet', who: 'system'});
+                ctx.send(greeter, {type: 'WhoToGreet', who: 'system'});
 
                 message = await ctx.ask(greeter, {type: 'Greet'});
                 expect(message.body, '2nd message').to.eql({type: 'Greeting', message: 'hello, system'});
@@ -99,7 +97,7 @@ describe('system', () => {
                 address({id}: { id: string }) {
                     return `Account:${id}`
                 },
-                async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, props: { balance: number }){
+                async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, props: { balance: number }) {
                     await new Promise(res => setTimeout(res, 10)); // fake dynamic import
                     return new AccountImpl(ctx, props);
                 }
@@ -146,23 +144,24 @@ describe('system', () => {
             }
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
-                const system = new ActorSystem();
+                const system = createActorSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
+                await system.run(async ctx => {
+                    const alice = ctx.actorOf(Account, {id: 'alice', balance: 0});
 
-                const alice = system.actorOf(Account, {id: 'alice', balance: 0});
+                    const mailbox = new Mailbox(ctx);
 
-                const mailbox = new Mailbox(system);
+                    await mailbox.ask(alice, {
+                        type: 'ChangeBalance',
+                        delta: 150,
+                        reference: 'fooo'
+                    });
 
-                await mailbox.ask(alice, {
-                    type: 'ChangeBalance',
-                    delta: 150,
-                    reference: 'fooo'
+                    expect(await mailbox.ask(alice, {type: 'CheckBalance'}), '1st balance').to.have.property('balance', 150);
+                    ctx.send(alice, {type: 'ChangeBalance', delta: -100});
+                    ctx.send(alice, {type: 'SetBalance', balance: 123});
+                    expect(await mailbox.ask(alice, {type: 'CheckBalance'}), '2nd balance').to.have.property('balance', 123);
                 });
-
-                expect(await mailbox.ask(alice, {type: 'CheckBalance'}), '1st balance').to.have.property('balance', 150);
-                system.send(alice, {type: 'ChangeBalance', delta: -100});
-                system.send(alice, {type: 'SetBalance', balance: 123});
-                expect(await mailbox.ask(alice, {type: 'CheckBalance'}), '2nd balance').to.have.property('balance', 123);
             }));
 
             it('plugins lazy loading, prototype and singleton', plan(8, async () => {
@@ -193,11 +192,11 @@ describe('system', () => {
 
                     onReceive(msg: OpenAccount | Transfer | CheckBalance) {
                         if (msg.type === 'OpenAccount') {
-                            this.ctx.system.actorOf(Account, {id: msg.name, balance: msg.balance});
+                            this.ctx.actorOf(Account, {id: msg.name, balance: msg.balance});
                         } else if (msg.type === 'CheckBalance' && this.ctx.replyTo) {
                             // forward the request to the account actor
-                            const accountRef = this.ctx.system.actorFor(Account.address({id: msg.name}));
-                            this.ctx.system.send(accountRef, {type: 'CheckBalance'}, this.ctx.replyTo);
+                            const accountRef = this.ctx.actorFor(Account.address({id: msg.name}));
+                            this.ctx.send(accountRef, {type: 'CheckBalance'}, this.ctx.replyTo);
                         } else if (msg.type === 'Transfer') {
                             // don't sync the following operation with this actor
                             this.transfer(msg, this.ctx.replyTo);
@@ -208,66 +207,67 @@ describe('system', () => {
 
                     private async transfer(msg: Transfer, replyTo?: ActorRef<any>) {
                         // send deduction request to the 'from' side
-                        const fromAccountRef = this.ctx.system.actorFor(Account.address({id: msg.from}));
+                        const fromAccountRef = this.ctx.actorFor(Account.address({id: msg.from}));
                         const deductionResult = await this.ctx.ask(fromAccountRef, {
                             type: 'ChangeBalance',
                             reference: msg.reference,
                             delta: -msg.amount
                         }, {id: `Transfer:${msg.reference}`}) as MessageAndContext<Succeeded | Rejected>;
                         if (deductionResult.body.type === 'Succeeded') {
-                            const toAccountRef = this.ctx.system.actorFor(Account.address({id: msg.to}));
-                            this.ctx.system.send(toAccountRef, {
+                            const toAccountRef = this.ctx.actorFor(Account.address({id: msg.to}));
+                            this.ctx.send(toAccountRef, {
                                 type: 'ChangeBalance',
                                 delta: msg.amount,
                                 reference: msg.reference
                             }, replyTo);
                         } else if (deductionResult.body.type === 'Rejected') {
                             // report rejection
-                            replyTo && this.ctx.system.send(replyTo, deductionResult.body);
+                            replyTo && this.ctx.send(replyTo, deductionResult.body);
                         } else {
                             deductionResult.unhandled();
                         }
                     }
                 }
 
-
-                const system = new ActorSystem();
+                const system = createActorSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
-                const bank = system.actorOf(Bank);
+                await system.run(async ctx => {
+                    const bank = ctx.actorOf(Bank);
 
-                async function assertBalances(alice: number, bob: number, msg: string) {
-                    const aliceBalanceMsg = mailbox.ask(bank, {
-                        type: 'CheckBalance',
-                        name: 'Alice'
-                    }, {id: `Alice balance ${msg}`});
-                    expect(await aliceBalanceMsg, `Alice balance ${msg}`).to.have.property('balance', alice);
-                    const bobBalanceMsg = mailbox.ask(bank, {
-                        type: 'CheckBalance',
-                        name: 'Bob'
-                    }, {id: `Bob balance ${msg}`});
-                    expect(await bobBalanceMsg, `Bob balance ${msg}`).to.have.property('balance', bob);
-                }
+                    async function assertBalances(alice: number, bob: number, msg: string) {
+                        const aliceBalanceMsg = mailbox.ask(bank, {
+                            type: 'CheckBalance',
+                            name: 'Alice'
+                        }, {id: `Alice balance ${msg}`});
+                        expect(await aliceBalanceMsg, `Alice balance ${msg}`).to.have.property('balance', alice);
+                        const bobBalanceMsg = mailbox.ask(bank, {
+                            type: 'CheckBalance',
+                            name: 'Bob'
+                        }, {id: `Bob balance ${msg}`});
+                        expect(await bobBalanceMsg, `Bob balance ${msg}`).to.have.property('balance', bob);
+                    }
 
-                system.send(bank, {type: 'OpenAccount', name: 'Alice', balance: 100});
-                system.send(bank, {type: 'OpenAccount', name: 'Bob', balance: 0});
-                const mailbox = new Mailbox(system);
-                await assertBalances(100, 0, 'initially');
-                expect(await mailbox.ask(bank, {
-                    type: 'Transfer',
-                    from: 'Alice',
-                    reference: 'first',
-                    to: 'Bob',
-                    amount: 60
-                }, {id: 'first transfer'})).to.eql({type: 'Succeeded', reference: 'first'});
-                await assertBalances(40, 60, 'after transfer');
-                expect(await mailbox.ask(bank, {
-                    type: 'Transfer',
-                    from: 'Alice',
-                    reference: 'second',
-                    to: 'Bob',
-                    amount: 60
-                }, {id: 'second transfer'})).to.eql({type: 'Rejected', reference: 'second'});
-                await assertBalances(40, 60, 'after rejected transfer');
+                    ctx.send(bank, {type: 'OpenAccount', name: 'Alice', balance: 100});
+                    ctx.send(bank, {type: 'OpenAccount', name: 'Bob', balance: 0});
+                    const mailbox = new Mailbox(ctx);
+                    await assertBalances(100, 0, 'initially');
+                    expect(await mailbox.ask(bank, {
+                        type: 'Transfer',
+                        from: 'Alice',
+                        reference: 'first',
+                        to: 'Bob',
+                        amount: 60
+                    }, {id: 'first transfer'})).to.eql({type: 'Succeeded', reference: 'first'});
+                    await assertBalances(40, 60, 'after transfer');
+                    expect(await mailbox.ask(bank, {
+                        type: 'Transfer',
+                        from: 'Alice',
+                        reference: 'second',
+                        to: 'Bob',
+                        amount: 60
+                    }, {id: 'second transfer'})).to.eql({type: 'Rejected', reference: 'second'});
+                    await assertBalances(40, 60, 'after rejected transfer');
+                });
             }));
         });
     });

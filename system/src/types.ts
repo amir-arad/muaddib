@@ -1,11 +1,8 @@
 import {ActorSystem} from "./index";
+import {Observable} from 'rxjs';
 
 export interface ActorRef<T> {
     address: Address;
-    //
-    // forward(message: Message<T>): void;
-    //
-    // tell(message: Message<T>, sender?: ActorRef<any>): void;
 }
 
 export interface ChildActorRef<T> extends ActorRef<T> {
@@ -21,15 +18,28 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
+export interface ActorSystem {
+    log: Observable<SystemLogEvents>;
+
+    run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
+}
+
 export interface ActorContext<T> extends MessageContext {
     log: {
         log(...args: any[]): void;
     };
-    system: ActorSystem;
+
     self: ActorRef<T>;
     send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) => void;
     ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
     stop(): void;
+
+    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
+
+    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
+
+    actorFor(addr: Address): ActorRef<any>;
+
 }
 
 export function isPromiseLike(subj: any): subj is PromiseLike<any> {

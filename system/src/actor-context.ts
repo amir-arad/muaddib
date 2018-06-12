@@ -1,5 +1,14 @@
-import {ActorContext, ActorRef, Address, Message, MessageAndContext, Serializable} from "./types";
-import {ActorSystem} from "./actor-system";
+import {
+    ActorContext,
+    ActorDef,
+    ActorRef,
+    Address,
+    ChildActorRef,
+    Message,
+    MessageAndContext,
+    Serializable
+} from "./types";
+import {ActorSystemImpl} from "./actor-system";
 
 
 export class ActorContextImpl<M> implements ActorContext<M> {
@@ -12,8 +21,18 @@ export class ActorContextImpl<M> implements ActorContext<M> {
         log: (...args: any[]): void => this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     };
 
-    constructor(public readonly system: ActorSystem, private readonly address: Address) {
-        this.self = system.actorFor(this.address);
+    constructor(public readonly system: ActorSystemImpl, private readonly address: Address) {
+        this.self = system.getActorRef(this.address);
+    }
+
+    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
+        return this.system.createActor<P, M>(ctor, props as P);
+    }
+
+    actorFor(addr: Address): ActorRef<any> {
+        return this.system.getActorRef(addr);
     }
 
     ask<T1 extends Serializable>(to: ActorRef<T1>, reqBody: T1, options?: { id?: string; timeout?: number }): Promise<MessageAndContext<any>> {
@@ -26,7 +45,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
             }, options && options.timeout || 1000);
             // make an actor that will receive the reply
             const replyAddress = this.address + '/asking:' + (options && options.id || this.__jobCounter++);
-            const replyActorRef = await this.system.actorOf({
+            const replyActorRef = await this.actorOf({
                 address: replyAddress,
                 create: (askContext: ActorContextImpl<any>) => (body: M) => {
                     const message = askContext.__message;
@@ -67,7 +86,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
     __startMessageScope(m: Message<M>) {
         this.__message = m;
         if (typeof m.replyTo === 'string') {
-            this.replyTo = this.system.actorFor(m.replyTo);
+            this.replyTo = this.system.getActorRef(m.replyTo);
         }
     }
 
