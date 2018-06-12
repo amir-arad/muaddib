@@ -5,7 +5,6 @@ import {flatMap} from 'rxjs/operators';
 import {Subject} from "rxjs";
 
 const emptyArr: any[] = [];
-const CONCURRENT_MESSAGES = 1;
 
 export class ActorManager<P, M> {
     private readonly inbox = new Subject<Message<M>>();
@@ -13,7 +12,7 @@ export class ActorManager<P, M> {
 
     constructor(ctor: ActorDef<P, M>, address: Address, props: P, system: ActorSystem) {
         this.context = new ActorContextImpl(system, address);
-        const actor = (isActorFactory(ctor) ? ctor.create(this.context, props!) : new ctor(this.context, props!));
+        const actor = (isActorFactory(ctor) ? ctor.create(this.context, props) : new ctor(this.context, props));
         if (isPromiseLike(actor)) {
             this.initActorAsync(actor);
         } else {
@@ -39,12 +38,13 @@ export class ActorManager<P, M> {
             try {
                 this.context.__startMessageScope(m);
                 const actorResult = typeof actor === 'function' ? actor(m.body) : actor.onReceive(m.body);
-                return await actorResult || emptyArr;
+                await actorResult;
+                return emptyArr;
             } finally {
                 this.context.__stopMessageScope();
             }
         };
-        this.inbox.pipe(flatMap(actorHandleMessage, CONCURRENT_MESSAGES)).subscribe();
+        this.inbox.pipe(flatMap(actorHandleMessage, 1 /* one message at a time */)).subscribe();
         // TODO : startup hook on actor object
     }
 
