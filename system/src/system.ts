@@ -1,5 +1,5 @@
 import {flatMap} from 'rxjs/operators';
-import {Subject} from "rxjs";
+import {from, Subject} from "rxjs";
 import {
     Actor,
     ActorContext,
@@ -76,18 +76,17 @@ export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
 // TODO: supervision
 export class System {
     private actorRefs: { [a: string]: ActorRef<any> } = {};
-    private localActors: { [a: string]: ActorInfo } = {};
+    private localActors: { [a: string]: ActorManager<any, any> } = {};
     private jobCounter = 0;
 
     public readonly log = new Subject<SystemLogEvents>();
 
-    private stopActor(address: Address) {
-        const actor = this.localActors[address];
-        if (actor) {
+    stopActor(address: Address) {
+        const actorMgr = this.localActors[address];
+        if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
-            actor.inbox.complete();
+            actorMgr.stop();
             delete this.localActors[address];
-            // TODO : shutdown hook on actor object
         }
     }
 
@@ -102,11 +101,11 @@ export class System {
         ref.stop();
     }
 
-    protected sendMessage(message: Message<any>) {
+    sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
         const localRecepient = this.localActors[message.to];
         if (localRecepient) {
-            localRecepient.inbox.next(message);
+            localRecepient.sendMessage(message);
         } else {
             this.log.next({type: 'UndeliveredMessage', message});
             console.error(new Error(`unknown address "${message.to}"`).stack);
@@ -117,9 +116,9 @@ export class System {
         this.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address});
     }
 
-    actorOf<M>(ctor: ActorDef<void, M>): Promise<ChildActorRef<M>>;
-    actorOf<P, M>(ctor: ActorDef<P>, props: P): Promise<ChildActorRef<M>>;
-    async actorOf<P, M>(ctor: ActorDef<P>, props?: P): Promise<ChildActorRef<M>> {
+    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -131,7 +130,8 @@ export class System {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        await this.startActor<P, M>(ctor, address, props!);
+        this.localActors[address] = new ActorManager<P, M>(ctor, address, props as P, this);
+        this.log.next({type: 'ActorCreated', address});
         return this.actorFor(address) as ChildActorRef<M>;
     }
 
@@ -151,39 +151,45 @@ export class System {
             stack: new Error('unhandled message').stack
         })
     };
+}
 
-    private async startActor<P, M>(ctor: ActorDef<P, M>, address: Address, props: P) {
-        // wiring
-        const system = this;
-        const inbox = new Subject<Message<any>>();
-        let jobCounter = 0;
+function isPromiseLike(subj: any): subj is PromiseLike<any> {
+    return Boolean(subj && typeof subj.then === 'function');
+}
+
+class ActorManager<P, M> {
+    private readonly inbox = new Subject<Message<M>>();
+    private readonly context: InternalActorContext<M>;
+    private jobCounter = 0;
+
+    //constructor(private actor: Actor<M>, private context: InternalActorContext<any>, private system: System) {
+    constructor(private ctor: ActorDef<P, M>, private address: Address, private props: P, private system: System) {
         // TODO: a class should be more efficient
-        const context: InternalActorContext<any> = {
+        this.context = {
             log: {
-                log: (...args: any[]) => this.log.next({type: 'LogEvent', source: address, message: args})
+                log: (...args: any[]) => system.log.next({type: 'LogEvent', source: address, message: args})
             },
-            unhandled: () => this.unhandled(address, context.__message),
-            self: this.actorFor(address),
+            unhandled: () => system.unhandled(address, this.context.__message),
+            self: system.actorFor(address),
             system,
             send: <T1>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) =>
                 system.sendMessage({to: to.address, body, replyTo: replyTo && replyTo.address}),
             ask: async <T1>(to: ActorRef<T1>, reqBody: T1, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>> => {
                 // the actor may be handling a different message when this one returns
-                // TODO: kill?
                 return new Promise<MessageAndContext<any>>(async (resolve, reject) => {
                     // time out the entire operation
                     const timeout = setTimeout(() => {
                         replyActorRef.stop();
-                        reject(new Error('request timed out'));
+                        reject(new Error('request timed out : ' + JSON.stringify(reqBody)));
                     }, options && options.timeout || 1000);
                     // make an actor that will receive the reply
-                    const replyAddress = address + '/asking:' + (options && options.id || jobCounter++);
-                    const replyActorRef = await this.actorOf({
+                    const replyAddress = address + '/asking:' + (options && options.id || this.jobCounter++);
+                    const replyActorRef = await system.actorOf({
                         address: replyAddress,
-                        create: (ctx: InternalActorContext<any>) => (body: M) => {
+                        create: (askContext: InternalActorContext<any>) => (body: M) => {
                             resolve({
-                                replyTo: ctx.replyTo,
-                                unhandled: () => this.unhandled(replyAddress, ctx.__message),
+                                replyTo: askContext.replyTo,
+                                unhandled: () => system.unhandled(replyAddress, askContext.__message),
                                 body
                             });
                             clearTimeout(timeout);
@@ -191,33 +197,55 @@ export class System {
                         }
                     });
                     // send the request with custom replyTo
-                    this.send(to, reqBody, replyActorRef);
+                    system.send(to, reqBody, replyActorRef);
                 });
             },
-            stop: () => this.stopActor(address),
+            stop: () => system.stopActor(address),
             __message: undefined as any
         };
+
+        const actor = (isActorFactory(ctor) ? ctor.create(this.context, props!) : new ctor(this.context, props!));
+        if (isPromiseLike(actor)) {
+            const meanwhile: Array<Message<M>> = [];
+            const meanwhileSubscription = this.inbox.subscribe(m => {
+                meanwhile.push(m);
+            });
+            actor.then(a => {
+                this.initActor(a);
+                meanwhileSubscription.unsubscribe();
+                from(meanwhile).subscribe(m => this.inbox.next(m));
+            });
+        } else {
+            this.initActor(actor);
+        }
+    }
+
+    initActor(actor: Actor<M>) {
         // TODO allow actor to add custom rxjs operators for its mailbox
-        const actorHandleMessage = async (m: Message<any>) => {
+        const actorHandleMessage = async (m: Message<M>) => {
             try {
-                context.__message = m;
+                this.context.__message = m;
                 if (typeof m.replyTo === 'string') {
-                    context.replyTo = this.actorFor(m.replyTo);
+                    this.context.replyTo = this.system.actorFor(m.replyTo);
                 }
                 const actorResult = typeof actor === 'function' ? actor(m.body) : actor.onReceive(m.body);
                 return await actorResult || emptyArr;
             } finally {
-                context.__message = undefined as any;
-                context.replyTo = undefined;
+                this.context.__message = undefined as any;
+                this.context.replyTo = undefined;
             }
         };
-        inbox.pipe(flatMap(actorHandleMessage, CONCURRENT_MESSAGES)).subscribe();
-
-        // actor lifecycle
-        const actor = await (isActorFactory(ctor) ? ctor.create(context, props!) : new ctor(context, props!));
+        this.inbox.pipe(flatMap(actorHandleMessage, CONCURRENT_MESSAGES)).subscribe();
         // TODO : startup hook on actor object
-        this.localActors[address] = {inbox, actor};
-        this.log.next({type: 'ActorCreated', address});
+    }
+
+    sendMessage(message: Message<M>) {
+        this.inbox.next(message);
+    }
+
+    stop() {
+        // TODO : shutdown hook on actor object
+        this.inbox.complete();
     }
 }
 

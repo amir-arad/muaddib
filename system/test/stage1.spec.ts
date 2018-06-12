@@ -50,7 +50,7 @@ describe('system', () => {
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
                 // Create the 'greeter' actor
-                const greeter = await system.actorOf(Greeter);
+                const greeter = system.actorOf(Greeter);
                 // Tell the 'greeter' to change its 'greeting' message
                 system.send(greeter, {type: 'WhoToGreet', who: 'muadib'});
                 // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
@@ -92,11 +92,20 @@ describe('system', () => {
                 type: 'CheckBalance';
             }
 
-            class Account implements ActorObject<ChangeBalance | CheckBalance | SetBalance> {
-                static address({id}: { id: string }) {
+            /**
+             * simulate lazily, dynamically importing AccountImpl
+             */
+            const Account = {
+                address({id}: { id: string }) {
                     return `Account:${id}`
+                },
+                async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, props: { balance: number }){
+                    await new Promise(res => setTimeout(res, 10)); // fake dynamic import
+                    return new AccountImpl(ctx, props);
                 }
+            };
 
+            class AccountImpl implements ActorObject<ChangeBalance | CheckBalance | SetBalance> {
                 balance: number;
 
                 constructor(private ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, {balance}: { balance: number }) {
@@ -140,7 +149,7 @@ describe('system', () => {
                 const system = new System();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
-                const alice = await system.actorOf(Account, {id: 'alice', balance: 0});
+                const alice = system.actorOf(Account, {id: 'alice', balance: 0});
 
                 const mailbox = new Mailbox(system);
 
@@ -182,9 +191,9 @@ describe('system', () => {
                     constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance>) {
                     }
 
-                    async onReceive(msg: OpenAccount | Transfer | CheckBalance) {
+                    onReceive(msg: OpenAccount | Transfer | CheckBalance) {
                         if (msg.type === 'OpenAccount') {
-                            await this.ctx.system.actorOf(Account, {id: msg.name, balance: msg.balance});
+                            this.ctx.system.actorOf(Account, {id: msg.name, balance: msg.balance});
                         } else if (msg.type === 'CheckBalance' && this.ctx.replyTo) {
                             // forward the request to the account actor
                             const accountRef = this.ctx.system.actorFor(Account.address({id: msg.name}));
@@ -224,7 +233,7 @@ describe('system', () => {
 
                 const system = new System();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
-                const bank = await system.actorOf(Bank);
+                const bank = system.actorOf(Bank);
 
                 async function assertBalances(alice: number, bob: number, msg: string) {
                     const aliceBalanceMsg = mailbox.ask(bank, {
