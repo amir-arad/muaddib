@@ -55,7 +55,11 @@ export class ActorContextImpl<M> implements ActorContext<M> {
             return this.__actorRefs.get(baseRef)!;
         } else {
             const boundRef = Object.create(baseRef) as ChildActorRef<M>;
-            boundRef.send = (body: M, replyTo?: ActorRef<any>) => this.system.sendMessage({to: baseRef.address, body, replyTo: replyTo && replyTo.address});
+            boundRef.send = (body: M, replyTo?: ActorRef<any>) => this.system.sendMessage({
+                to: baseRef.address,
+                body,
+                replyTo: replyTo && replyTo.address
+            });
             boundRef.ask = (body: M, options?: { id?: string; timeout?: number }) => this.__ask(baseRef.address, body, options);
             this.__actorRefs.set(baseRef, boundRef);
             return boundRef;
@@ -71,7 +75,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
                 reject(new Error('request timed out : ' + JSON.stringify(reqBody)));
             }, options && options.timeout || 1000);
             // make an actor that will receive the reply
-            const replyAddress = this.address + '/asking:' + (options && options.id || this.__jobCounter++);
+            const replyAddress = this.address + '/asking:' + to + '/' + (options && options.id || this.__jobCounter++);
             const replyActorRef = await this.actorOf({
                 address: replyAddress,
                 create: (askContext: ActorContextImpl<any>) => (body: M) => {

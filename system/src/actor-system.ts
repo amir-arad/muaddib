@@ -1,15 +1,5 @@
 import {Subject} from "rxjs";
-import {
-    ActorContext,
-    ActorDef,
-    ActorFunction,
-    ActorRef,
-    ActorSystem,
-    Address,
-    Message,
-    Serializable,
-    SystemLogEvents
-} from "./types";
+import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 
 export class BaseActorRef<T> {
