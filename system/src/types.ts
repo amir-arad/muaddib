@@ -29,7 +29,11 @@ export interface ActorContext<T> extends MessageContext {
     self: ActorRef<T>;
     send: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, replyTo?: ActorRef<any>) => void;
     ask: <T1 extends Serializable>(to: ActorRef<T1>, body: T1, options?: { id?: string, timeout?: number }) => Promise<MessageAndContext<any>>; // unsafe because the actor may be handling a different message when this one returns
-    stop():void;
+    stop(): void;
+}
+
+export function isPromiseLike(subj: any): subj is PromiseLike<any> {
+    return Boolean(subj && typeof subj.then === 'function');
 }
 
 export interface ActorFactory<P, M> {
@@ -71,3 +75,44 @@ export interface Message<T extends Serializable> {
     to: Address;
     body: T;
 }
+
+export interface MessageSent {
+    type: 'MessageSent';
+    message: Message<any>;
+}
+
+export interface UndeliveredMessage {
+    type: 'UndeliveredMessage';
+    message: Message<any>;
+}
+
+export interface LogEvent {
+    type: 'LogEvent';
+    source: Address;
+    message: any[];
+}
+
+export interface UnhandledMessage {
+    type: 'UnhandledMessage';
+    source: Address;
+    message: Message<any>;
+    stack?: string;
+}
+
+export interface ActorCreated {
+    type: 'ActorCreated';
+    address: Address;
+}
+
+export interface ActorDestroyed {
+    type: 'ActorDestroyed';
+    address: Address;
+}
+
+export type SystemLogEvents =
+    MessageSent
+    | UndeliveredMessage
+    | UnhandledMessage
+    | ActorCreated
+    | ActorDestroyed
+    | LogEvent;
