@@ -9,18 +9,27 @@ import {
     Serializable
 } from "./types";
 import {ActorSystemImpl, BaseActorRef} from "./actor-system";
-
+import {DIContextImpl} from "./dependencies";
 
 export class ActorContextImpl<M> implements ActorContext<M> {
     private __message?: Message<M>;
     private __jobCounter = 0;
     private __actorRefs = new WeakMap<BaseActorRef<any>, ChildActorRef<any>>();
-
+    private diContext: DIContextImpl;
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
 
-    constructor(public readonly system: ActorSystemImpl, private readonly address: Address) {
+    constructor(public readonly system: ActorSystemImpl, private readonly definition: ActorDef<any, any>, private readonly address: Address, private parent? : ActorContextImpl<any>) {
         this.self = this.makeBoundReference(this.address);
+        this.diContext = new DIContextImpl(parent && parent.diContext);
+    }
+
+    resolve(key: string): Promise<null | any | any[]>{
+        return this.diContext.resolve(key, this.definition);
+    }
+
+    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void {
+        this.diContext.bindValue(key, ctx, value);
     }
 
     log(...args: any[]): void {
@@ -30,7 +39,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
     actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
     actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
     actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
-        return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P));
+        return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P, this));
     }
 
     actorFor(addr: Address): ActorRef<any> {

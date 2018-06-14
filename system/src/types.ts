@@ -23,13 +23,23 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface ActorSystem {
+export interface ActorSystem extends BindContext {
     log: Observable<SystemLogEvents>;
 
     run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
 }
 
-export interface ActorContext<T> extends MessageContext {
+// DI:
+export interface BindContext {
+    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void;
+}
+
+export interface ResolveContext {
+    resolve(key: string): Promise<null | any | any[]>;
+}
+// :DI
+
+export interface ActorContext<T> extends MessageContext, BindContext, ResolveContext {
     log(...args: any[]): void;
 
     self: ActorRef<T>;

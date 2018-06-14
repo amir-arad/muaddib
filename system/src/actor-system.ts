@@ -1,6 +1,15 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
+import {
+    ActorContext,
+    ActorDef,
+    ActorFunction,
+    ActorSystem,
+    Address,
+    Message,
+    SystemLogEvents
+} from "./types";
 import {ActorManager} from "./actor-manager";
+import {ActorContextImpl} from "./actor-context";
 
 export class BaseActorRef<T> {
     constructor(private system: ActorSystem, public address: Address) {
@@ -22,13 +31,24 @@ export function createActorSystem(): ActorSystem {
     return new ActorSystemImpl();
 }
 
+// definition of some root actor to serve as root-level binding resolution context
+const rootActorDefinition: ActorDef<any, any> = {
+    address: 'root',
+    create: nullActor
+};
+
 // TODO: supervision
 export class ActorSystemImpl implements ActorSystem {
     private actorRefs: { [a: string]: BaseActorRef<any> } = {}; // TODO: weakmap
     private localActors: { [a: string]: ActorManager<any, any> } = {};
+    private rootContext = new ActorContextImpl(this, rootActorDefinition, 'root');
     private jobCounter = 0;
 
     public readonly log = new Subject<SystemLogEvents>();
+
+    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void {
+        this.rootContext.bindValue(key, ctx, value);
+    }
 
     stopActor(address: Address) {
         const actorMgr = this.localActors[address];
@@ -49,7 +69,7 @@ export class ActorSystemImpl implements ActorSystem {
                     res(); // TODO: move to shutdown hook
                     return nullActor(ctx);
                 }
-            }, undefined);
+            }, undefined, this.rootContext);
         });
     }
 
@@ -64,7 +84,7 @@ export class ActorSystemImpl implements ActorSystem {
         }
     }
 
-    createActor<P, M>(ctor: ActorDef<P, M>, props: P) {
+    createActor<P, M>(ctor: ActorDef<P, M>, props: P, context: ActorContextImpl<any>) {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -76,7 +96,8 @@ export class ActorSystemImpl implements ActorSystem {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        this.localActors[address] = new ActorManager<P, M>(ctor, address, props, this);
+        const newContext = new ActorContextImpl<M>(this, ctor, address, context);
+        this.localActors[address] = new ActorManager<P, M>(newContext, ctor, address, props);
         this.log.next({type: 'ActorCreated', address});
         return address;
     }
