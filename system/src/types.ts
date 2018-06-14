@@ -23,24 +23,74 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface ActorSystem extends BindContext {
+export interface ActorSystem {
+
+    container: BindContext;
+
     log: Observable<SystemLogEvents>;
 
     run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
 }
 
 // DI:
+
+export enum Quantity {'optional', 'single', 'any'};
+
+export enum ProviderScope {
+    'singleton', // The same instance will be returned for each request
+    'template' // A new instance of the type will be created each time one is requested
+}
+
+export type ProvisioningPath = {
+    key: string;
+    target?: object;
+}
+
+export type DependencyProvisioning = {
+    type: string;
+    value: any;
+    scope?: ProviderScope;
+} & ProvisioningPath & (ValueProvisioning);
+
+export type ValueProvisioning = {
+    type: 'value';
+    value: any;
+    scope?: 'singleton'
+}
+
 export interface BindContext {
-    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void;
+    /**
+     * ignore previously set values on self and parents
+     * @param {ProvisioningPath} path what to ignore
+     */
+    clear(path: ProvisioningPath): void;
+
+    /**
+     * define a provisioning of dependencies
+     */
+    set(provisioning: DependencyProvisioning): void;
+
+    // reset(provisioning: DependencyProvisioning): void;
 }
 
 export interface ResolveContext {
-    resolve(key: string): Promise<null | any | any[]>;
-}
-// :DI
+    get<T>(key: string): Promise<T[]>;
 
-export interface ActorContext<T> extends MessageContext, BindContext, ResolveContext {
+    get<T>(key: string, quantity: Quantity.optional): Promise<T>;
+
+    get<T>(key: string, quantity: Quantity.single): Promise<T>;
+
+    get<T>(key: string, quantity: Quantity.any): Promise<Array<T>>;
+}
+
+// :DI
+export interface ActorContext<T> extends MessageContext { // BindContext, ResolveContext
+
+    container: BindContext & ResolveContext;
+
     log(...args: any[]): void;
+
+    run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
 
     self: ActorRef<T>;
 

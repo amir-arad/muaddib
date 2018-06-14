@@ -11,6 +11,7 @@ import {
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 
+// TODO: remove
 export class BaseActorRef<T> {
     constructor(private system: ActorSystem, public address: Address) {
     }
@@ -27,9 +28,6 @@ export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
     return ctx.unhandled.bind(ctx)
 }
 
-export function createActorSystem(): ActorSystem {
-    return new ActorSystemImpl();
-}
 
 // definition of some root actor to serve as root-level binding resolution context
 const rootActorDefinition: ActorDef<any, any> = {
@@ -39,16 +37,12 @@ const rootActorDefinition: ActorDef<any, any> = {
 
 // TODO: supervision
 export class ActorSystemImpl implements ActorSystem {
-    private actorRefs: { [a: string]: BaseActorRef<any> } = {}; // TODO: weakmap
+    private actorRefs: { [a: string]: BaseActorRef<any> } = {}; // TODO: remove
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private rootContext = new ActorContextImpl(this, rootActorDefinition, 'root');
-    private jobCounter = 0;
+    public container = this.rootContext.container;
 
     public readonly log = new Subject<SystemLogEvents>();
-
-    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void {
-        this.rootContext.bindValue(key, ctx, value);
-    }
 
     stopActor(address: Address) {
         const actorMgr = this.localActors[address];
@@ -59,18 +53,8 @@ export class ActorSystemImpl implements ActorSystem {
         }
     }
 
-    run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        return new Promise(res => {
-            this.createActor({
-                address: 'run:' + address,
-                create: async ctx => {
-                    await script(ctx);
-                    ctx.stop();
-                    res(); // TODO: move to shutdown hook
-                    return nullActor(ctx);
-                }
-            }, undefined, this.rootContext);
-        });
+    run(script: (ctx: ActorContext<never>) => any, address?: Address): Promise<void> {
+        return this.rootContext.run(script, address);
     }
 
     sendMessage(message: Message<any>) {

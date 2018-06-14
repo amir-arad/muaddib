@@ -8,28 +8,35 @@ import {
     MessageAndContext,
     Serializable
 } from "./types";
-import {ActorSystemImpl, BaseActorRef} from "./actor-system";
-import {DIContextImpl} from "./dependencies";
+import {ActorSystemImpl, BaseActorRef, nullActor} from "./actor-system";
+import {Container} from "./dependencies";
 
 export class ActorContextImpl<M> implements ActorContext<M> {
     private __message?: Message<M>;
     private __jobCounter = 0;
     private __actorRefs = new WeakMap<BaseActorRef<any>, ChildActorRef<any>>();
-    private diContext: DIContextImpl;
+    public container: Container;
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
+    private jobCounter = 0;
 
-    constructor(public readonly system: ActorSystemImpl, private readonly definition: ActorDef<any, any>, private readonly address: Address, private parent? : ActorContextImpl<any>) {
+    constructor(public readonly system: ActorSystemImpl, private readonly definition: ActorDef<any, any>, private readonly address: Address, private parent?: ActorContextImpl<any>) {
         this.self = this.makeBoundReference(this.address);
-        this.diContext = new DIContextImpl(parent && parent.diContext);
+        this.container = new Container(this.definition, parent && parent.container);
     }
 
-    resolve(key: string): Promise<null | any | any[]>{
-        return this.diContext.resolve(key, this.definition);
-    }
-
-    bindValue(key: string, ctx: ActorDef<any, any>, value: any): void {
-        this.diContext.bindValue(key, ctx, value);
+    run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+        return new Promise(res => {
+            this.system.createActor({
+                address: 'run:' + address,
+                create: async ctx => {
+                    await script(ctx);
+                    ctx.stop();
+                    res(); // TODO: move to shutdown hook
+                    return nullActor(ctx);
+                }
+            }, undefined, this);
+        });
     }
 
     log(...args: any[]): void {
