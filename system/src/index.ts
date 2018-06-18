@@ -1,10 +1,10 @@
-///<reference path="actor-system.ts"/>
-import {ActorSystem} from "./types";
-import {} from "./dependencies";
-import {ActorSystemImpl} from "./actor-system";
+import {ActorSystem} from "./actors/types";
+import {ActorSystemImpl} from "./actors/actor-system";
 
-export {nullActor} from './actor-system'
-export * from './types'
+export {nullActor} from './actors/actor-system'
+
+export * from './actors/types'
+export * from './dependencies/types'
 
 
 export function createActorSystem(): ActorSystem {

@@ -9,7 +9,7 @@ import {
     Serializable
 } from "./types";
 import {ActorSystemImpl, BaseActorRef, nullActor} from "./actor-system";
-import {Container} from "./dependencies";
+import {Container} from "../dependencies/dependencies";
 
 export class ActorContextImpl<M> implements ActorContext<M> {
     private __message?: Message<M>;
