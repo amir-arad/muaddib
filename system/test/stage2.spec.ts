@@ -10,7 +10,7 @@ describe('system', () => {
         it.only(`2nd level plugins`, plan(1, async () => {
             type Dependencies = {
                 operation: Plugin;
-                testScript: (ctx: ActorContext<never, Dependencies>) => any;
+                testScript: (ctx: ActorContext<never, Dependencies>) => void;
             }
 
             // have a plugin fetch objects array that implement its extention API (2nd level plugins) and use them for its BL.
@@ -48,11 +48,11 @@ describe('system', () => {
                     expect((await firstProcessor.ask({arg: 100})).body).to.eql(p2(p1(100)));
                 }
             });
-            //   system.container.set({key: 'devMode', value: true});
-      //      system.container.set({key: 'operation', value: p1, target: Processor});
+            // system.container.set({key: 'devMode', value: true});
+            system.container.set({key: 'operation', value: p1, target: Processor});
             await system.run(async ctx => {
-                //ctx.container.clear({key: 'operation', target: Processor});
-      //          ctx.container.set({key: 'operation', value: p2, target: Processor});
+                // ctx.container.clear({key: 'operation', target: Processor});
+                ctx.container.set({key: 'operation', value: p2, target: Processor});
                 const script = await ctx.container.get('testScript', Quantity.single);
                 script(ctx);
             });
