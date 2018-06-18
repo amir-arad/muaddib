@@ -1,9 +1,20 @@
-import {BindContext, DependencyProvisioning, ProvisioningPath, Quantity, ResolveContext} from "./types";
+import {
+    AnyProvisioning,
+    AsyncFactoryProvisioning,
+    BindContext,
+    isAsyncFactoryProvisioning,
+    isValueProvisioning,
+    ProvisioningPath,
+    Quantity,
+    ResolveContext,
+    ValueProvisioning
+} from "./types";
 
 const globalTarget = {};
 
+// TODO: handle singleton scope
 export class Container implements BindContext, ResolveContext {
-    private provisioning = new WeakMap<object, Map<string, Set<DependencyProvisioning>>>();
+    private provisioning = new WeakMap<object, Map<string, Set<AnyProvisioning>>>();
     private noPropagation = new WeakMap<object, Set<string>>();
 
     constructor(private providerContext: object, private parent?: Container) {
@@ -37,7 +48,9 @@ export class Container implements BindContext, ResolveContext {
         }
     }
 
-    set(provisioning: DependencyProvisioning): void {
+    set(value: ValueProvisioning): void;
+    set(asyncFactory: AsyncFactoryProvisioning): void;
+    set(provisioning: AnyProvisioning): void {
         const target = provisioning.target || globalTarget;
         let bindingContext = this.provisioning.get(target);
         if (!bindingContext) {
@@ -71,24 +84,30 @@ export class Container implements BindContext, ResolveContext {
         }
     }
 
-    private resolveProvider = (provider: DependencyProvisioning) => {
-        switch (provider.type) {
-            case 'value' :
-                return provider.value;
-            default :
-                throw new Error(`unknown provider type: ${provider.type}`);
+    private resolveProvider = (provider: AnyProvisioning) => {
+        if (isValueProvisioning(provider)) {
+            return provider.value;
+        } else if (isAsyncFactoryProvisioning(provider)) {
+            return  provider.asyncFactory();
+        } else {
+            throw new Error(`unknown provider: ${JSON.stringify(provider)}`);
         }
     };
 
     private resolve(key: string, target: object): Array<Promise<any>> {
         const result = this.parent && this.shouldPropagate(key, target) ? this.parent.resolve(key, target) : [];
+        this.resolveByContext(key, globalTarget, result);
+        this.resolveByContext(key, target, result);
+        return result;
+    }
+
+    private resolveByContext(key: string, target: object, accumulator: Array<any>) {
         let bindingContext = this.provisioning.get(target);
         if (bindingContext) {
             let bindingBucket = bindingContext.get(key);
             if (bindingBucket) {
-                result.push(...Array.from(bindingBucket).map(this.resolveProvider));
+                accumulator.push(...Array.from(bindingBucket).map(this.resolveProvider));
             }
         }
-        return result;
     }
 }

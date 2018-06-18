@@ -47,17 +47,26 @@ export type ProvisioningPath = {
 }
 
 export type DependencyProvisioning = {
-    type: string;
-    value: any;
     scope?: ProviderScope;
-} & ProvisioningPath & (ValueProvisioning);
+} & ProvisioningPath;
 
-export type ValueProvisioning = {
-    type: 'value';
+export function isValueProvisioning(p: AnyProvisioning): p is ValueProvisioning{
+    return 'value' in p;
+}
+export type ValueProvisioning = DependencyProvisioning & {
     value: any;
     scope?: 'singleton'
 }
 
+export type AsyncFactoryProvisioning = DependencyProvisioning & {
+    asyncFactory: () => Promise<any>;
+}
+
+export function isAsyncFactoryProvisioning(p: AnyProvisioning): p is AsyncFactoryProvisioning{
+    return 'asyncFactory' in p;
+}
+
+export type AnyProvisioning = ValueProvisioning | AsyncFactoryProvisioning;
 export interface BindContext {
     /**
      * ignore previously set values on self and parents
@@ -68,7 +77,8 @@ export interface BindContext {
     /**
      * define a provisioning of dependencies
      */
-    set(provisioning: DependencyProvisioning): void;
+    set(value: ValueProvisioning): void;
+    set(asyncFactory: AsyncFactoryProvisioning): void;
 
     // reset(provisioning: DependencyProvisioning): void;
 }

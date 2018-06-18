@@ -1,6 +1,5 @@
-import {ActorContext, createActorSystem} from "../src";
+import {ActorContext, createActorSystem, Quantity} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
-import {Quantity} from "../src/types";
 
 type Plugin = (i: number) => number;
 
@@ -21,7 +20,6 @@ describe('system', () => {
                 },
                 async create(ctx: ActorContext<ComputationRequest>, props: InputProps) {
                     const plugins = await ctx.container.get<Plugin>('operation', Quantity.any);
-                    const devMode = await ctx.container.get<boolean>('devMode', Quantity.optional);
                     return (msg: ComputationRequest) => {
                         if (ctx.replyTo) {
                             const result = plugins.reduce((v, o) => o(v), msg.arg);
@@ -39,24 +37,19 @@ describe('system', () => {
             const system = createActorSystem();
             system.log.subscribe(m => console.log(JSON.stringify(m)));
             system.container.set({
-                key: 'operation',
-                type: 'value',
-                value: p1,
-                target: Processor
+                key: 'testScript',
+                asyncFactory: async () => async (ctx: ActorContext<any>) => {
+                    const firstProcessor = ctx.actorOf(Processor, {id: 'first'});
+                    expect((await firstProcessor.ask({arg: 100})).body).to.eql(p2(p1(100)));
+                }
             });
+         //   system.container.set({key: 'devMode', value: true});
+            system.container.set({key: 'operation', value: p1, target: Processor});
             await system.run(async ctx => {
-                //       ctx.container.setValue('devMode', undefined as any, true); // TODO change to 2 arguments
-             //   ctx.container.clear({key: 'operation', target: Processor});
-                ctx.container.set({
-                    key: 'operation',
-                    type: 'value',
-                    value: p2,
-                    target: Processor
-                });
-                // ctx.di.bind();
-                const firstProcessor = ctx.actorOf(Processor, {id: 'first'});
-                expect((await firstProcessor.ask({arg: 100})).body).to.eql(p2(p1(100)));
-                // TODO: continue
+                //ctx.container.clear({key: 'operation', target: Processor});
+                ctx.container.set({key: 'operation', value: p2, target: Processor});
+                const script = await ctx.container.get<(ctx: ActorContext<never>) => any>('testScript', Quantity.single);
+                script(ctx);
             });
         }));
     });
