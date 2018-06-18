@@ -30,7 +30,7 @@ export function nullActor<T>(ctx: ActorContext<T, any>): ActorFunction<T> {
 
 
 // definition of some root actor to serve as root-level binding resolution context
-const rootActorDefinition: ActorDef<any, any> = {
+const rootActorDefinition: ActorDef<any, any, any> = {
     address: 'root',
     create: nullActor
 };

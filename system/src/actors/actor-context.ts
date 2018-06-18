@@ -43,9 +43,9 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
         this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     }
 
-    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M>, props?: P): ChildActorRef<M> {
+    actorOf<M>(ctor: ActorDef<void, M, Partial<D>>): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M, Partial<D>>, props: P): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M, Partial<D>>, props?: P): ChildActorRef<M> {
         return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P, this));
     }
 
