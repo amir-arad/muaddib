@@ -23,20 +23,20 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface ActorSystem {
-    container: BindContext;
+export interface ActorSystem<D = {}> {
+    container: BindContext<D>;
 
     log: Observable<SystemLogEvents>;
 
-    run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
+    run(script: (ctx: ActorContext<never, D>) => void | Promise<void>, address?: Address): Promise<void>;
 }
 
-export interface ActorContext<T> extends MessageContext { // BindContext, ResolveContext
-    container: BindContext & ResolveContext;
+export interface ActorContext<T, D = {}> extends MessageContext { // BindContext, ResolveContext
+    container: BindContext<D> & ResolveContext<D>;
 
     log(...args: any[]): void;
 
-    run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
+    run(script: (ctx: ActorContext<never, D>) => void | Promise<void>, address?: Address): Promise<void>;
 
     self: ActorRef<T>;
 
@@ -54,15 +54,15 @@ export function isPromiseLike(subj: any): subj is PromiseLike<any> {
     return Boolean(subj && typeof subj.then === 'function');
 }
 
-export interface ActorFactory<P, M> {
-    create(ctx: ActorContext<M>, props: P): Actor<M> | Promise<Actor<M>>;
+export interface ActorFactory<P, M, D> {
+    create(ctx: ActorContext<M, D>, props: P): Actor<M> | Promise<Actor<M>>;
 }
 
-export interface ActorClass<P, M> {
-    new(ctx: ActorContext<M>, props: P): ActorObject<M>;
+export interface ActorClass<P, M, D> {
+    new(ctx: ActorContext<M, D>, props: P): ActorObject<M>;
 }
 
-export function isActorFactory<P, M>(subj: ActorDef<P, M>): subj is ActorFactory<P, M> & ActorMetadata<P> {
+export function isActorFactory<P, M, D>(subj: ActorDef<P, M, D>): subj is ActorFactory<P, M, D> & ActorMetadata<P> {
     return typeof (subj as any).create === 'function';
 }
 
@@ -70,7 +70,7 @@ export interface ActorMetadata<P> {
     address: P extends void ? Address : (props: P) => Address
 }
 
-export type ActorDef<P = void, M = any> = ActorMetadata<P> & (ActorFactory<P, M> | ActorClass<P, M>);
+export type ActorDef<P = void, M = any, D = {}> = ActorMetadata<P> & (ActorFactory<P, M, D> | ActorClass<P, M, D>);
 
 export type Actor<M extends Serializable> = ActorObject<M> | ActorFunction<M>;
 

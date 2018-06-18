@@ -1,6 +1,6 @@
 import {expect, plan} from "./testkit/chai.spec";
 import {ActorContext, ActorRef, createActorSystem} from "../src";
-import {ActorObject, MessageAndContext} from "../src/types";
+import {ActorObject, MessageAndContext} from "../src";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));

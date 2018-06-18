@@ -11,21 +11,21 @@ import {
 import {ActorSystemImpl, BaseActorRef, nullActor} from "./actor-system";
 import {Container} from "../dependencies/dependencies";
 
-export class ActorContextImpl<M> implements ActorContext<M> {
+export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;
     private __jobCounter = 0;
-    private __actorRefs = new WeakMap<BaseActorRef<any>, ChildActorRef<any>>();
-    public container: Container;
+    private __actorRefs = new WeakMap<BaseActorRef, ChildActorRef<any>>();
+    public container: Container<D>;
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
     private jobCounter = 0;
 
-    constructor(public readonly system: ActorSystemImpl, private readonly definition: ActorDef<any, any>, private readonly address: Address, private parent?: ActorContextImpl<any>) {
+    constructor(public readonly system: ActorSystemImpl<D>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, private parent?: ActorContextImpl<any, D>) { // TODO: private parent?: ActorContextImpl<any, Partial<D>>
         this.self = this.makeBoundReference(this.address);
         this.container = new Container(this.definition, parent && parent.container);
     }
 
-    run(script: (ctx: ActorContext<never>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+    run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
         return new Promise(res => {
             this.system.createActor({
                 address: 'run:' + address,
@@ -66,7 +66,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
     }
 
     private makeBoundReference<M>(address: Address): ChildActorRef<M> {
-        const baseRef: BaseActorRef<M> = this.system.getBaseActorRef(address);
+        const baseRef: BaseActorRef = this.system.getBaseActorRef(address);
         if (this.__actorRefs.has(baseRef)) {
             return this.__actorRefs.get(baseRef)!;
         } else {
@@ -94,7 +94,7 @@ export class ActorContextImpl<M> implements ActorContext<M> {
             const replyAddress = this.address + '/asking:' + to + '/' + (options && options.id || this.__jobCounter++);
             const replyActorRef = await this.actorOf({
                 address: replyAddress,
-                create: (askContext: ActorContextImpl<any>) => (body: M) => {
+                create: (askContext: ActorContextImpl<any, D>) => (body: M) => {
                     const message = askContext.__message;
                     if (message) {
                         resolve({

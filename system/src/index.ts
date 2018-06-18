@@ -7,6 +7,6 @@ export * from './actors/types'
 export * from './dependencies/types'
 
 
-export function createActorSystem(): ActorSystem {
-    return new ActorSystemImpl();
+export function createActorSystem<D>(): ActorSystem<D> {
+    return new ActorSystemImpl<D>();
 }

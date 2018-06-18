@@ -1,5 +1,5 @@
 
-export enum Quantity {'optional', 'single', 'any'};
+export enum Quantity {optional, single, any}
 
 export enum ProviderScope {
     'singleton', // The same instance will be returned for each request
@@ -15,45 +15,40 @@ export type DependencyProvisioning = {
     scope?: ProviderScope;
 } & ProvisioningPath;
 
-export function isValueProvisioning(p: AnyProvisioning): p is ValueProvisioning{
+export function isValueProvisioning<T>(p: AnyProvisioning<T>): p is ValueProvisioning<T>{
     return 'value' in p;
 }
-export type ValueProvisioning = DependencyProvisioning & {
-    value: any;
+export type ValueProvisioning<T> = DependencyProvisioning & {
+    value: T;
     scope?: 'singleton'
 }
 
-export type AsyncFactoryProvisioning = DependencyProvisioning & {
-    asyncFactory: () => Promise<any>;
+export type AsyncFactoryProvisioning<T> = DependencyProvisioning & {
+    asyncFactory: () => Promise<T>;
 }
 
-export function isAsyncFactoryProvisioning(p: AnyProvisioning): p is AsyncFactoryProvisioning{
+export function isAsyncFactoryProvisioning<T>(p: AnyProvisioning<T>): p is AsyncFactoryProvisioning<T>{
     return 'asyncFactory' in p;
 }
 
-export type AnyProvisioning = ValueProvisioning | AsyncFactoryProvisioning;
-export interface BindContext {
-    /**
-     * ignore previously set values on self and parents
-     * @param {ProvisioningPath} path what to ignore
-     */
-    clear(path: ProvisioningPath): void;
+export type AnyProvisioning<T> = ValueProvisioning<T> | AsyncFactoryProvisioning<T>;
 
+export interface BindContext<T> {
     /**
      * define a provisioning of dependencies
      */
-    set(value: ValueProvisioning): void;
-    set(asyncFactory: AsyncFactoryProvisioning): void;
+    set<T1 extends keyof T>(value: ValueProvisioning<T[T1]>): void;
+    set<T1 extends keyof T>(asyncFactory: AsyncFactoryProvisioning<T[T1]>): void;
 
     // reset(provisioning: DependencyProvisioning): void;
 }
 
-export interface ResolveContext {
-    get<T>(key: string): Promise<T[]>;
+export interface ResolveContext<T> {
+    get<T1 extends keyof T>(key: T1): Promise<T[T1][]>;
 
-    get<T>(key: string, quantity: Quantity.optional): Promise<T>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.optional): Promise<T[T1]>;
 
-    get<T>(key: string, quantity: Quantity.single): Promise<T>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.single): Promise<T[T1]>;
 
-    get<T>(key: string, quantity: Quantity.any): Promise<Array<T>>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.any): Promise<Array<T[T1]>>;
 }

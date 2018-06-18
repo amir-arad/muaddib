@@ -8,7 +8,7 @@ const emptyArr: any[] = [];
 export class ActorManager<P, M> {
     private readonly inbox = new Subject<Message<M>>();
 
-    constructor(private context : ActorContextImpl<M>, definition: ActorDef<P, M>, address: Address, props: P) {
+    constructor(private context : ActorContextImpl<M, any>, definition: ActorDef<P, M, any>, address: Address, props: P) {
         const actor = (isActorFactory(definition) ? definition.create(this.context, props) : new definition(this.context, props));
         if (isPromiseLike(actor)) {
             this.initActorAsync(actor);

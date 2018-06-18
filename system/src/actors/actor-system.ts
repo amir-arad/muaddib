@@ -12,8 +12,8 @@ import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 
 // TODO: remove
-export class BaseActorRef<T> {
-    constructor(private system: ActorSystem, public address: Address) {
+export class BaseActorRef {
+    constructor(private system: ActorSystem<any>, public address: Address) {
     }
 
     stop(): void {
@@ -24,7 +24,7 @@ export class BaseActorRef<T> {
 /**
  * create a no-operation function actor for given actor context
  */
-export function nullActor<T>(ctx: ActorContext<T>): ActorFunction<T> {
+export function nullActor<T>(ctx: ActorContext<T, any>): ActorFunction<T> {
     return ctx.unhandled.bind(ctx)
 }
 
@@ -36,10 +36,10 @@ const rootActorDefinition: ActorDef<any, any> = {
 };
 
 // TODO: supervision
-export class ActorSystemImpl implements ActorSystem {
-    private actorRefs: { [a: string]: BaseActorRef<any> } = {}; // TODO: remove
+export class ActorSystemImpl<D> implements ActorSystem<D> {
+    private actorRefs: { [a: string]: BaseActorRef } = {}; // TODO: remove
     private localActors: { [a: string]: ActorManager<any, any> } = {};
-    private rootContext = new ActorContextImpl(this, rootActorDefinition, 'root');
+    private rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root');
     public container = this.rootContext.container;
 
     public readonly log = new Subject<SystemLogEvents>();
@@ -53,7 +53,7 @@ export class ActorSystemImpl implements ActorSystem {
         }
     }
 
-    run(script: (ctx: ActorContext<never>) => any, address?: Address): Promise<void> {
+    run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void> {
         return this.rootContext.run(script, address);
     }
 
@@ -68,7 +68,7 @@ export class ActorSystemImpl implements ActorSystem {
         }
     }
 
-    createActor<P, M>(ctor: ActorDef<P, M>, props: P, context: ActorContextImpl<any>) {
+    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
         if (typeof ctor.address === 'string') {
             // yes, using var. less boilerplate.
             var address: Address = ctor.address;
@@ -80,7 +80,7 @@ export class ActorSystemImpl implements ActorSystem {
         if (this.localActors[address]) {
             throw new Error(`an actor is already registered under ${address}`)
         }
-        const newContext = new ActorContextImpl<M>(this, ctor, address, context);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, address, context);
         this.localActors[address] = new ActorManager<P, M>(newContext, ctor, address, props);
         this.log.next({type: 'ActorCreated', address});
         return address;

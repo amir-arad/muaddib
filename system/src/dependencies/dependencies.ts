@@ -13,11 +13,11 @@ import {
 const globalTarget = {};
 
 // TODO: handle singleton scope
-export class Container implements BindContext, ResolveContext {
-    private provisioning = new WeakMap<object, Map<string, Set<AnyProvisioning>>>();
+export class Container<T> implements BindContext<T>, ResolveContext<T> {
+    private provisioning = new WeakMap<object, Map<string, Set<AnyProvisioning<T[keyof T]>>>>();
     private noPropagation = new WeakMap<object, Set<string>>();
 
-    constructor(private providerContext: object, private parent?: Container) {
+    constructor(private providerContext: object, private parent?: Container<T>) {
 
     }
 
@@ -48,9 +48,9 @@ export class Container implements BindContext, ResolveContext {
         }
     }
 
-    set(value: ValueProvisioning): void;
-    set(asyncFactory: AsyncFactoryProvisioning): void;
-    set(provisioning: AnyProvisioning): void {
+    set(value: ValueProvisioning<T[keyof T]>): void;
+    set(asyncFactory: AsyncFactoryProvisioning<T[keyof T]>): void;
+    set(provisioning: AnyProvisioning<T[keyof T]>): void {
         const target = provisioning.target || globalTarget;
         let bindingContext = this.provisioning.get(target);
         if (!bindingContext) {
@@ -65,11 +65,12 @@ export class Container implements BindContext, ResolveContext {
         bindingBucket.add(provisioning);
     }
 
-    get<T>(key: string): Promise<T[]>;
-    get<T>(key: string, quantity: Quantity.optional): Promise<T>;
-    get<T>(key: string, quantity: Quantity.single): Promise<T>;
-    get<T>(key: string, quantity: Quantity.any): Promise<Array<T>>;
-    async get(key: string, quantity: Quantity = Quantity.any): Promise<any> {
+
+    get<T1 extends keyof T>(key: T1): Promise<T[T1][]>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.optional): Promise<T[T1]>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.single): Promise<T[T1]>;
+    get<T1 extends keyof T>(key: T1, quantity: Quantity.any): Promise<Array<T[T1]>>;
+    async get<T1 extends keyof T>(key: T1, quantity: Quantity = Quantity.any): Promise<null | T[T1] | Array<T[T1]>> {
         const result = this.resolve(key, this.providerContext);
         if (quantity === Quantity.any) {
             return await Promise.all(result);
@@ -84,7 +85,7 @@ export class Container implements BindContext, ResolveContext {
         }
     }
 
-    private resolveProvider = (provider: AnyProvisioning) => {
+    private resolveProvider = (provider: AnyProvisioning<T[keyof T]>) => {
         if (isValueProvisioning(provider)) {
             return provider.value;
         } else if (isAsyncFactoryProvisioning(provider)) {
@@ -94,7 +95,7 @@ export class Container implements BindContext, ResolveContext {
         }
     };
 
-    private resolve(key: string, target: object): Array<Promise<any>> {
+    private resolve<T1 extends keyof T>(key: T1, target: object): Array<Promise<T[T1]>> {
         const result = this.parent && this.shouldPropagate(key, target) ? this.parent.resolve(key, target) : [];
         this.resolveByContext(key, globalTarget, result);
         this.resolveByContext(key, target, result);
