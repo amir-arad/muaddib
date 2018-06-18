@@ -7,7 +7,7 @@ type ComputationRequest = { arg: number };
 
 describe('system', () => {
     describe('stage 2 - plugin objects', () => {
-        it.only(`2nd level plugins`, plan(1, async () => {
+        it(`2nd level plugins`, plan(1, async () => {
             type Dependencies = {
                 operation: Plugin;
                 testScript: (ctx: ActorContext<never, Dependencies>) => void;

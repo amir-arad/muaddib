@@ -25,18 +25,9 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
         this.container = new Container(this.definition, parent && parent.container);
     }
 
-    run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        return new Promise(res => {
-            this.system.createActor({
-                address: 'run:' + address,
-                create: async ctx => {
-                    await script(ctx);
-                    ctx.stop();
-                    res(); // TODO: move to shutdown hook
-                    return nullActor(ctx);
-                }
-            }, undefined, this);
-        });
+    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+        const newContext = new ActorContextImpl<M, D>(this.system, this.definition, this.address + '/run:'+ address, this);
+        await script(newContext);
     }
 
     log(...args: any[]): void {
