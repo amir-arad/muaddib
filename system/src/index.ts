@@ -8,6 +8,6 @@ export * from './actors/types'
 export * from './dependencies/types'
 
 
-export function createActorSystem<D>(container: Container<D> = new Container({})): ActorSystem<D> {
+export function createActorSystem<D>(container: Container<D> = new Container()): ActorSystem<D> {
     return new ActorSystemImpl<D>(container);
 }

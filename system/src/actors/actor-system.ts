@@ -78,8 +78,8 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     }
 
     createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
-        var newAddress = this.makeNewAddress(ctor, props);
-        const newContainer = new Container(ctor, context.container.resolve);
+        const newAddress = this.makeNewAddress(ctor, props);
+        const newContainer = new Container(context.container.resolve);
         const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, newContainer);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
         this.log.next({type: 'ActorCreated', address: newAddress});

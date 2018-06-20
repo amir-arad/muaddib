@@ -9,7 +9,6 @@ export enum ProviderScope {
 
 export type ProvisioningPath<K = Index> = {
     key: K;
-    target?: object;
 }
 
 export type DependencyProvisioning = {

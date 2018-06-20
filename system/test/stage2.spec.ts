@@ -36,7 +36,7 @@ namespace Processor {
 
 describe('system', () => {
     describe('stage 2 - plugin objects', () => {
-        it.only(`2nd level plugins`, plan(1, async () => {
+        it(`2nd level plugins`, plan(1, async () => {
             type SystemPlugins = Processor.Plugins &
                 {
                     theActor: typeof Processor;
@@ -48,9 +48,9 @@ describe('system', () => {
             const system = createActorSystem<SystemPlugins>();
             //    system.log.subscribe(m => console.log(JSON.stringify(m)));
             system.container.set({key: 'theActor', value: Processor});
-            system.container.set({key: Processor.pluginSymbol, value: p1, target: Processor});
+            system.container.set({key: Processor.pluginSymbol, value: p1});
             await system.run(async ctx => {
-                ctx.container.set({key: Processor.pluginSymbol, value: p2, target: Processor});
+                ctx.container.set({key: Processor.pluginSymbol, value: p2});
                 const firstProcessor = ctx.actorOf(Processor, {id: 'first'});
                 expect((await firstProcessor.ask({arg: 100})).body).to.eql(p2(p1(100)));
             });
