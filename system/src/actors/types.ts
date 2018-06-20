@@ -38,7 +38,6 @@ export interface ActorContext<T, D> extends MessageContext { // BindContext, Res
     log(...args: any[]): void;
 
     run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void>;
-    run<D1 extends D>(script: (ctx: ActorContext<never, D1>) => any, address?: Address, container?: Container<D1>): Promise<void>;
 
     self: ActorRef<T>;
 

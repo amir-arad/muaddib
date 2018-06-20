@@ -23,8 +23,8 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
         this.self = this.makeBoundReference(this.address);
     }
 
-    async run<D1 extends D>(script: (ctx: ActorContext<never, D1>) => any, address: Address = '' + this.jobCounter++, container: Container<D1> = this.container as any): Promise<void> {
-        const newContext = new ActorContextImpl<never, D1>(this.system, this.definition as any, this.address + '/run:' + address, container);
+    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+        const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.container);
         await script(newContext);
     }
 
