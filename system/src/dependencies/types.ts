@@ -54,3 +54,5 @@ export interface ResolveContext<T> {
 
     get<T1 extends keyof T>(key: T1, quantity: Quantity.any): Promise<Array<T[T1]>>;
 }
+
+export type Awaitable<T> = Promise<T> | T;
