@@ -8,25 +8,23 @@ import {
     MessageAndContext,
     Serializable
 } from "./types";
-import {ActorSystemImpl, BaseActorRef, nullActor} from "./actor-system";
+import {ActorSystemImpl, BaseActorRef} from "./actor-system";
 import {Container} from "../dependencies/dependencies";
 
 export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;
     private __jobCounter = 0;
     private __actorRefs = new WeakMap<BaseActorRef, ChildActorRef<any>>();
-    public container: Container<D>;
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
     private jobCounter = 0;
 
-    constructor(public readonly system: ActorSystemImpl<D>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, private parent?: ActorContextImpl<any, D>) { // TODO: private parent?: ActorContextImpl<any, Partial<D>>
+    constructor(public readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, public container: Container<D>) {
         this.self = this.makeBoundReference(this.address);
-        this.container = new Container(this.definition, parent && parent.container);
     }
 
-    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        const newContext = new ActorContextImpl<M, D>(this.system, this.definition, this.address + '/run:'+ address, this);
+    async run<D1 extends D>(script: (ctx: ActorContext<never, D1>) => any, address: Address = '' + this.jobCounter++, container: Container<D1> = this.container as any): Promise<void> {
+        const newContext = new ActorContextImpl<never, D1>(this.system, this.definition as any, this.address + '/run:' + address, container);
         await script(newContext);
     }
 
@@ -85,7 +83,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
             const replyAddress = this.address + '/asking:' + to + '/' + (options && options.id || this.__jobCounter++);
             const replyActorRef = await this.actorOf({
                 address: replyAddress,
-                create: (askContext: ActorContextImpl<any, D>) => (body: M) => {
+                create: (askContext: ActorContextImpl<any, Partial<D>>) => (body: M) => {
                     const message = askContext.__message;
                     if (message) {
                         resolve({

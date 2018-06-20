@@ -1,15 +1,8 @@
 import {Subject} from "rxjs";
-import {
-    ActorContext,
-    ActorDef,
-    ActorFunction,
-    ActorSystem,
-    Address,
-    Message,
-    SystemLogEvents
-} from "./types";
+import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
+import {Container} from "../dependencies/dependencies";
 
 // TODO: remove
 export class BaseActorRef {
@@ -37,12 +30,17 @@ const rootActorDefinition: ActorDef<any, any, any> = {
 
 // TODO: supervision
 export class ActorSystemImpl<D> implements ActorSystem<D> {
+
     private actorRefs: { [a: string]: BaseActorRef } = {}; // TODO: remove
     private localActors: { [a: string]: ActorManager<any, any> } = {};
-    private rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root');
-    public container = this.rootContext.container;
-
+    private readonly rootContext: ActorContextImpl<never, D>;
+    public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
+
+    constructor(public container: Container<D>) {
+        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container);
+        this.run = this.rootContext.run.bind(this.rootContext);
+    }
 
     stopActor(address: Address) {
         const actorMgr = this.localActors[address];
@@ -51,10 +49,6 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
             actorMgr.stop();
             delete this.localActors[address];
         }
-    }
-
-    run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void> {
-        return this.rootContext.run(script, address);
     }
 
     sendMessage(message: Message<any>) {
@@ -68,22 +62,28 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         }
     }
 
-    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
+    private makeNewAddress<P>(ctor: ActorDef<P, any, any>, props: P) {
+        let newAddress : Address;
         if (typeof ctor.address === 'string') {
-            // yes, using var. less boilerplate.
-            var address: Address = ctor.address;
+            newAddress = ctor.address;
         } else if (typeof ctor.address === 'function') {
-            address = (ctor.address as any)(props);
+            newAddress = (ctor.address as any)(props);
         } else {
             throw new Error(`actor constructor missing an address resolver`);
         }
-        if (this.localActors[address]) {
-            throw new Error(`an actor is already registered under ${address}`)
+        if (this.localActors[newAddress]) {
+            throw new Error(`an actor is already registered under ${newAddress}`)
         }
-        const newContext = new ActorContextImpl<M, D>(this, ctor, address, context);
-        this.localActors[address] = new ActorManager<P, M>(newContext, ctor, address, props);
-        this.log.next({type: 'ActorCreated', address});
-        return address;
+        return newAddress;
+    }
+
+    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
+        var newAddress = this.makeNewAddress(ctor, props);
+        const newContainer = new Container(ctor, context.container.resolve);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, newContainer);
+        this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
+        this.log.next({type: 'ActorCreated', address: newAddress});
+        return newAddress;
     }
 
     getBaseActorRef(addr: Address) {

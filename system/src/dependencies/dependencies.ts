@@ -1,56 +1,35 @@
 import {
     AnyProvisioning,
-    AsyncFactoryProvisioning,
     BindContext,
     isAsyncFactoryProvisioning,
     isValueProvisioning,
     ProvisioningPath,
     Quantity,
-    ResolveContext,
-    ValueProvisioning
+    ResolveContext
 } from "./types";
 
+type Awaitable<T> = Promise<T> | T;
+type Resolver<T> = <T1 extends keyof T>(key: T1, target: object) => Array<Awaitable<T[T1]>>;
+
 const globalTarget = {};
+const emptyResolver = () => [];
 
 // TODO: handle singleton scope
 export class Container<T> implements BindContext<T>, ResolveContext<T> {
-    private provisioning = new WeakMap<object, Map<string, Set<AnyProvisioning<T[keyof T]>>>>();
-    private noPropagation = new WeakMap<object, Set<string>>();
+    private readonly provisioning = new WeakMap<object, Map<keyof T, Set<AnyProvisioning<T[keyof T]>>>>();
 
-    constructor(private providerContext: object, private parent?: Container<T>) {
+    resolve: Resolver<T> = <T1 extends keyof T>(key: T1, target: object) => {
+        const result = this.superResolve<T1>(key, target) as Array<Awaitable<T[T1]>>;
+        this.resolveByContext(key, globalTarget, result);
+        this.resolveByContext(key, target, result);
+        return result;
+    };
+
+    constructor(private providerContext: object, private superResolve: Resolver<T> = emptyResolver) {
 
     }
 
-    clear(path: ProvisioningPath): void {
-        const target = path.target || globalTarget;
-        // flag the key and target for no propagation
-        let noPropagationBucket = this.noPropagation.get(target);
-        if (!noPropagationBucket) {
-            noPropagationBucket = new Set();
-            this.noPropagation.set(target, noPropagationBucket);
-        }
-        noPropagationBucket.add(path.key);
-        // clear existing provisioning for the key and target
-        let bindingContext = this.provisioning.get(target);
-        if (!bindingContext) {
-            bindingContext = new Map();
-            this.provisioning.set(target, bindingContext);
-        }
-        bindingContext.set(path.key, new Set());
-    }
-
-    private shouldPropagate(key: string, target: object): boolean {
-        let noPropagationBucket = this.noPropagation.get(target);
-        if (noPropagationBucket) {
-            return !noPropagationBucket.has(key);
-        } else {
-            return true;
-        }
-    }
-
-    set(value: ValueProvisioning<T[keyof T]>): void;
-    set(asyncFactory: AsyncFactoryProvisioning<T[keyof T]>): void;
-    set(provisioning: AnyProvisioning<T[keyof T]>): void {
+    set<P extends keyof T>(provisioning: ProvisioningPath<P> & AnyProvisioning<T[P]>): void {
         const target = provisioning.target || globalTarget;
         let bindingContext = this.provisioning.get(target);
         if (!bindingContext) {
@@ -64,7 +43,6 @@ export class Container<T> implements BindContext<T>, ResolveContext<T> {
         }
         bindingBucket.add(provisioning);
     }
-
 
     get<T1 extends keyof T>(key: T1): Promise<T[T1][]>;
     get<T1 extends keyof T>(key: T1, quantity: Quantity.optional): Promise<T[T1]>;
@@ -85,27 +63,20 @@ export class Container<T> implements BindContext<T>, ResolveContext<T> {
         }
     }
 
-    private resolveProvider = (provider: AnyProvisioning<T[keyof T]>) => {
+    private resolveProvider = <T1 extends T[keyof T]>(provider: AnyProvisioning<T1>) => {
         if (isValueProvisioning(provider)) {
             return provider.value;
         } else if (isAsyncFactoryProvisioning(provider)) {
-            return  provider.asyncFactory();
+            return provider.asyncFactory();
         } else {
             throw new Error(`unknown provider: ${JSON.stringify(provider)}`);
         }
     };
 
-    private resolve<T1 extends keyof T>(key: T1, target: object): Array<Promise<T[T1]>> {
-        const result = this.parent && this.shouldPropagate(key, target) ? this.parent.resolve(key, target) : [];
-        this.resolveByContext(key, globalTarget, result);
-        this.resolveByContext(key, target, result);
-        return result;
-    }
-
-    private resolveByContext(key: string, target: object, accumulator: Array<any>) {
+    private resolveByContext<T1 extends keyof T>(key: T1, target: object, accumulator: Array<Awaitable<T[T1]>>) {
         let bindingContext = this.provisioning.get(target);
         if (bindingContext) {
-            let bindingBucket = bindingContext.get(key);
+            let bindingBucket = bindingContext.get(key) as Set<AnyProvisioning<T[T1]>> | undefined;
             if (bindingBucket) {
                 accumulator.push(...Array.from(bindingBucket).map(this.resolveProvider));
             }

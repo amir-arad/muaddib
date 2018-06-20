@@ -1,5 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, ResolveContext} from "../dependencies/types";
+import {Container} from "../dependencies/dependencies";
 
 export interface ActorRef<T> {
     address: Address;
@@ -28,7 +29,7 @@ export interface ActorSystem<D> {
 
     log: Observable<SystemLogEvents>;
 
-    run(script: (ctx: ActorContext<never, D>) => void | Promise<void>, address?: Address): Promise<void>;
+    run: ActorContext<never, D>['run'];
 }
 
 export interface ActorContext<T, D> extends MessageContext { // BindContext, ResolveContext
@@ -36,7 +37,8 @@ export interface ActorContext<T, D> extends MessageContext { // BindContext, Res
 
     log(...args: any[]): void;
 
-    run(script: (ctx: ActorContext<never, D>) => void | Promise<void>, address?: Address): Promise<void>;
+    run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void>;
+    run<D1 extends D>(script: (ctx: ActorContext<never, D1>) => any, address?: Address, container?: Container<D1>): Promise<void>;
 
     self: ActorRef<T>;
 
