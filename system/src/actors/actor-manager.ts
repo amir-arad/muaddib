@@ -8,7 +8,7 @@ const emptyArr: any[] = [];
 export class ActorManager<P, M> {
     private readonly inbox = new Subject<Message<M>>();
 
-    constructor(private context : ActorContextImpl<M, any>, definition: ActorDef<P, M, any>, address: Address, props: P) {
+    constructor(private context: ActorContextImpl<M, any>, definition: ActorDef<P, M, any>, address: Address, props: P) {
         const actor = (isActorFactory(definition) ? definition.create(this.context, props) : new definition(this.context, props));
         if (isPromiseLike(actor)) {
             this.initActorAsync(actor);
@@ -33,12 +33,12 @@ export class ActorManager<P, M> {
         // TODO allow actor to add custom rxjs operators for its mailbox
         const actorHandleMessage = async (m: Message<M>) => {
             try {
-                this.context.__startMessageScope(m);
+                this.context.startMessageScope(m);
                 const actorResult = typeof actor === 'function' ? actor(m.body) : actor.onReceive(m.body);
                 await actorResult;
                 return emptyArr;
             } finally {
-                this.context.__stopMessageScope();
+                this.context.stopMessageScope();
             }
         };
         this.inbox.pipe(flatMap(actorHandleMessage, 1 /* one message at a time */)).subscribe();

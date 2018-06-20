@@ -23,13 +23,13 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface ActorSystem<D> extends BindContext<D>{
+export interface ActorSystem<D> extends BindContext<D> {
     log: Observable<SystemLogEvents>;
 
     run: ActorContext<never, D>['run'];
 }
 
-export interface ActorContext<T, D> extends MessageContext, ResolveContext<D>{
+export interface ActorContext<T, D> extends MessageContext, ResolveContext<D> {
 
     log(...args: any[]): void;
 
@@ -64,7 +64,7 @@ export function isActorFactory<P, M, D>(subj: ActorDef<P, M, D>): subj is ActorF
 }
 
 export interface ActorMetadata<P> {
-    address: P extends void ? Address : (props: P) => Address
+    address: P extends void ? Address : Address | ((props: P) => Address)
 }
 
 export type ActorDef<P, M, D> = ActorMetadata<P> & (ActorFactory<P, M, D> | ActorClass<P, M, D>);

@@ -4,23 +4,12 @@ import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 import {BindContext, ResolveContext} from "../dependencies/types";
 
-// TODO: remove
-export class BaseActorRef {
-    constructor(private system: ActorSystem<any>, public address: Address) {
-    }
-
-    stop(): void {
-        (this.system as any).stopActor(this.address);
-    }
-}
-
 /**
  * create a no-operation function actor for given actor context
  */
 export function nullActor<T>(ctx: ActorContext<T, any>): ActorFunction<T> {
     return ctx.unhandled.bind(ctx)
 }
-
 
 // definition of some root actor to serve as root-level binding resolution context
 const rootActorDefinition: ActorDef<any, any, any> = {
@@ -30,8 +19,6 @@ const rootActorDefinition: ActorDef<any, any, any> = {
 
 // TODO: supervision
 export class ActorSystemImpl<D> implements ActorSystem<D> {
-
-    private actorRefs: { [a: string]: BaseActorRef } = {}; // TODO: remove
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
@@ -87,19 +74,10 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         return newAddress;
     }
 
-    getBaseActorRef(addr: Address) {
-        let result = this.actorRefs[addr];
-        if (!result) {
-            result = this.actorRefs[addr] = new BaseActorRef(this, addr);
-        }
-        return result;
-    }
-
-    unhandled(address: Address, message: Message<any>) {
+    unhandled(source: Address, message: Message<any>) {
         this.log.next({
             type: 'UnhandledMessage',
-            source: address,
-            message: message,
+            source, message,
             stack: new Error('unhandled message').stack
         })
     };

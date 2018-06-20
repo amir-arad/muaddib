@@ -8,22 +8,22 @@ import {
     MessageAndContext,
     Serializable
 } from "./types";
-import {ActorSystemImpl, BaseActorRef} from "./actor-system";
+import {ActorSystemImpl} from "./actor-system";
 import {Container} from "../dependencies/dependencies";
+import {ActorRefImpl} from "./actor-reference";
 
 export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;
+    private __actorRefs: { [a: string]: ChildActorRef<any> } = {};
     private __jobCounter = 0;
-    private __actorRefs = new WeakMap<BaseActorRef, ChildActorRef<any>>();
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
-    private jobCounter = 0;
 
-    constructor(public readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, public readonly get: Container<D>['get']) {
+    constructor(private readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, public readonly get: Container<D>['get']) {
         this.self = this.makeBoundReference(this.address);
     }
 
-    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
+    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.__jobCounter++): Promise<void> {
         const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.get);
         await script(newContext);
     }
@@ -32,9 +32,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
         this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     }
 
-    actorOf<M>(ctor: ActorDef<void, M, Partial<D>>): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M, Partial<D>>, props: P): ChildActorRef<M>;
-    actorOf<P, M>(ctor: ActorDef<P, M, Partial<D>>, props?: P): ChildActorRef<M> {
+    actorOf<P, M>(ctor: ActorDef<P, M, D>, props?: P): ChildActorRef<M> {
         return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P, this));
     }
 
@@ -55,62 +53,49 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     }
 
     private makeBoundReference<M>(address: Address): ChildActorRef<M> {
-        const baseRef: BaseActorRef = this.system.getBaseActorRef(address);
-        if (this.__actorRefs.has(baseRef)) {
-            return this.__actorRefs.get(baseRef)!;
-        } else {
-            const boundRef = Object.create(baseRef) as ChildActorRef<M>;
-            boundRef.send = (body: M, replyTo?: ActorRef<any>) => this.system.sendMessage({
-                to: baseRef.address,
-                body,
-                replyTo: replyTo && replyTo.address
-            });
-            boundRef.ask = (body: M, options?: { id?: string; timeout?: number }) => this.__ask(baseRef.address, body, options);
-            this.__actorRefs.set(baseRef, boundRef);
-            return boundRef;
+        let result = this.__actorRefs[address];
+        if (!result) {
+            result = this.__actorRefs[address] = new ActorRefImpl(this.system, address, this);
         }
+        return result;
     }
 
-    private __ask<T1 extends Serializable>(to: Address, reqBody: T1, options?: { id?: string; timeout?: number }): Promise<MessageAndContext<any>> {
-        // the actor may be handling a different message when this one returns
-        return new Promise<MessageAndContext<any>>(async (resolve, reject) => {
-            // time out the entire operation
-            const timeout = setTimeout(() => {
-                replyActorRef.stop();
-                reject(new Error('request timed out : ' + JSON.stringify(reqBody)));
-            }, options && options.timeout || 1000);
-            // make an actor that will receive the reply
-            const replyAddress = this.address + '/asking:' + to + '/' + (options && options.id || this.__jobCounter++);
-            const replyActorRef = await this.actorOf({
-                address: replyAddress,
-                create: (askContext: ActorContextImpl<any, Partial<D>>) => (body: M) => {
-                    const message = askContext.__message;
-                    if (message) {
-                        resolve({
-                            replyTo: askContext.replyTo && this.makeBoundReference(askContext.replyTo.address),
-                            unhandled: () => this.system.unhandled(replyAddress, message),
-                            body
-                        });
-                        clearTimeout(timeout);
-                        replyActorRef.stop();
-                    } else {
-                        throw new Error('unexpected : askContext.__message is empty');
-                    }
-                }
-            });
-            // send the request with custom replyTo
-            this.system.sendMessage({to, body: reqBody, replyTo: replyActorRef.address});
+    /**
+     * make an actor definitoin that will receive a response from another actor
+     * this serves the `ask()` method of actor References
+     * @param {Address} address the address of the actor to be defined
+     * */
+    makeReplyActor<T1 extends Serializable>(address: Address): ActorDef<void, T1, D> & { reply: Promise<MessageAndContext<T1>> } {
+        let resolve: (m: MessageAndContext<T1>) => void;
+        const reply = new Promise<MessageAndContext<T1>>((resolveArg) => {
+            resolve = resolveArg;
         });
+        return {
+            reply,
+            address,
+            create: (askContext: ActorContextImpl<any, D>) => (body: T1) => {
+                const message = askContext.__message;
+                if (message) {
+                    resolve({
+                        replyTo: askContext.replyTo && this.makeBoundReference(askContext.replyTo.address),
+                        unhandled: () => this.system.unhandled(address, message),
+                        body
+                    });
+                } else {
+                    throw new Error('unexpected : askContext.__message is empty');
+                }
+            }
+        };
     }
 
-    __startMessageScope(m: Message<M>) {
+    startMessageScope(m: Message<M>) {
         this.__message = m;
         if (typeof m.replyTo === 'string') {
             this.replyTo = this.makeBoundReference(m.replyTo);
         }
     }
 
-    __stopMessageScope() {
+    stopMessageScope() {
         this.__message = undefined;
         this.replyTo = undefined;
     }
