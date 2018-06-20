@@ -19,12 +19,12 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     public readonly self: ActorRef<M>;
     private jobCounter = 0;
 
-    constructor(public readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, public container: Container<D>) {
+    constructor(public readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, private readonly address: Address, public readonly get: Container<D>['get']) {
         this.self = this.makeBoundReference(this.address);
     }
 
     async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.jobCounter++): Promise<void> {
-        const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.container);
+        const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.get);
         await script(newContext);
     }
 

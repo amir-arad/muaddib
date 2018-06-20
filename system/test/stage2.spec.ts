@@ -1,58 +1,64 @@
-import {createActorSystem, ActorContext, Quantity} from "../src";
+import {ActorContext, createActorSystem, Quantity} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 
-// imagine this is a third-party plugin
-namespace Processor {
-    export const pluginSymbol = Symbol('operation');
-
-    export function address({id}: Processor.InputProps) {
-        return `Processor:${id}`
-    }
-
-    export async function create(ctx: ActorContext<Processor.Messages, Processor.Plugins>, props: Processor.InputProps) {
-        const plugins = await ctx.container.get(Processor.pluginSymbol, Quantity.any);
-        return (msg: Processor.ComputationRequest) => {
-            if (ctx.replyTo) {
-                const result = plugins.reduce((v, o) => o(v), msg.arg);
-                ctx.replyTo.send(result);
-            } else {
-                ctx.unhandled();
-            }
-        }
-    }
-
-    export type Plugins = { [Processor.pluginSymbol]: Plugin };
-
-    export type Messages = ComputationRequest;
-
-    export type ComputationRequest = { arg: number };
-
-    export type Plugin = (i: number) => number;
-
-    export type InputProps = {
+// simulating a third-party feature plugin module (Computation)
+// with its own plugins API (Computation.Operation)
+namespace Computation {
+    export type Props = {
         id: string;
     };
+
+    export type Context = {
+        [Computation.opSymbol]: Operation
+    };
+
+    export namespace messages {
+        export type ComputationRequest = { arg: number };
+        export type All = ComputationRequest;
+    }
+    export const Actor = {
+        address({id}: Props) {
+            return `Computation:${id}`
+        },
+
+        async create(ctx: ActorContext<messages.All, Context>, props: Props) {
+            const plugins = await ctx.get(opSymbol, Quantity.any);
+            return (msg: messages.ComputationRequest) => {
+                if (ctx.replyTo) {
+                    const result = plugins.reduce((v, o) => o(v), msg.arg);
+                    ctx.replyTo.send(result);
+                } else {
+                    ctx.unhandled();
+                }
+            }
+        }
+    };
+    export const opSymbol = Symbol('operations');
+    export type Operation = (i: number) => number;
 }
 
 describe('system', () => {
     describe('stage 2 - plugin objects', () => {
         it(`2nd level plugins`, plan(1, async () => {
-            type SystemPlugins = Processor.Plugins &
+            type SystemContext = Computation.Context &
                 {
-                    theActor: typeof Processor;
+                    theActor: typeof Computation.Actor;
                 }
 
-            const p1: Processor.Plugin = (i: number) => i + 1;
-            const p2: Processor.Plugin = (i: number) => i - 53;
+            const p1: Computation.Operation = (i: number) => i + 1;
+            const p2: Computation.Operation = (i: number) => i - 53;
 
-            const system = createActorSystem<SystemPlugins>();
-            //    system.log.subscribe(m => console.log(JSON.stringify(m)));
-            system.container.set({key: 'theActor', value: Processor});
-            system.container.set({key: Processor.pluginSymbol, value: p1});
+            const system = createActorSystem<SystemContext>();
+
+            system.log.subscribe(m => console.log(JSON.stringify(m)));
+            system.set({key: 'theActor', value: Computation.Actor});
+            system.set({key: Computation.opSymbol, value: p1});
+            system.set({key: Computation.opSymbol, value: p2});
             await system.run(async ctx => {
-                ctx.container.set({key: Processor.pluginSymbol, value: p2});
-                const firstProcessor = ctx.actorOf(Processor, {id: 'first'});
-                expect((await firstProcessor.ask({arg: 100})).body).to.eql(p2(p1(100)));
+                const actor = await ctx.get( 'theActor', Quantity.single);
+                const firstProcessor = ctx.actorOf(actor, {id: 'first'});
+                const request: Computation.messages.ComputationRequest = {arg: 100};
+                expect((await firstProcessor.ask(request)).body).to.eql(p2(p1(100)));
             });
         }));
     });

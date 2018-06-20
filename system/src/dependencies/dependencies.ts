@@ -14,6 +14,7 @@ type Resolver<T> = <T1 extends keyof T>(key: T1) => Array<Awaitable<T[T1]>>;
 const emptyResolver = () => [];
 
 // TODO: handle singleton scope
+// TODO: remove heirarchy??
 export class Container<T> implements BindContext<T>, ResolveContext<T> {
     private readonly provisioning = new Map<keyof T, Set<AnyProvisioning<T[keyof T]>>>();
 

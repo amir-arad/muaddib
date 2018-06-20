@@ -2,7 +2,7 @@ import {Subject} from "rxjs";
 import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
-import {Container} from "../dependencies/dependencies";
+import {BindContext, ResolveContext} from "../dependencies/types";
 
 // TODO: remove
 export class BaseActorRef {
@@ -35,11 +35,13 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
+    public readonly set: BindContext<D>['set'];
     public readonly log = new Subject<SystemLogEvents>();
 
-    constructor(public container: Container<D>) {
-        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container);
+    constructor(container: ResolveContext<D> & BindContext<D>) {
+        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', container.get.bind(container));
         this.run = this.rootContext.run.bind(this.rootContext);
+        this.set = container.set.bind(container);
     }
 
     stopActor(address: Address) {
@@ -63,7 +65,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     }
 
     private makeNewAddress<P>(ctor: ActorDef<P, any, any>, props: P) {
-        let newAddress : Address;
+        let newAddress: Address;
         if (typeof ctor.address === 'string') {
             newAddress = ctor.address;
         } else if (typeof ctor.address === 'function') {
@@ -79,8 +81,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
 
     createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
         const newAddress = this.makeNewAddress(ctor, props);
-        const newContainer = new Container(context.container.resolve);
-        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, newContainer);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, context.get);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
