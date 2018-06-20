@@ -7,7 +7,7 @@ export enum ProviderScope {
     'template' // A new instance of the type will be created each time one is requested
 }
 
-export type ProvisioningPath<K = string> = {
+export type ProvisioningPath<K = Index> = {
     key: K;
     target?: object;
 }
@@ -39,9 +39,9 @@ export interface BindContext<T> {
     /**
      * define a provisioning of dependencies
      */
-    set<T1 extends keyof T>(value: ValueProvisioning<T[T1]>): void;
+    set<T1 extends keyof T>(value: ProvisioningPath<T1> & ValueProvisioning<T[T1]>): void;
 
-    set<T1 extends keyof T>(asyncFactory: AsyncFactoryProvisioning<T[T1]>): void;
+    set<T1 extends keyof T>(asyncFactory: ProvisioningPath<T1> & AsyncFactoryProvisioning<T[T1]>): void;
 
     // reset(provisioning: DependencyProvisioning): void;
 }
