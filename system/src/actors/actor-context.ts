@@ -76,6 +76,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
             create: (askContext: ActorContextImpl<any, D>) => (body: T1) => {
                 const message = askContext.__message;
                 if (message) {
+                    // the actor may be handling a different message when this one returns
                     resolve({
                         replyTo: askContext.replyTo && this.makeBoundReference(askContext.replyTo.address),
                         unhandled: () => this.system.unhandled(address, message),

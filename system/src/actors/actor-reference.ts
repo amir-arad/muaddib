@@ -20,7 +20,6 @@ export class ActorRefImpl<T> implements ChildActorRef<T> {
     async ask(body: T, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>> {
         // make an actor definition that will receive the reply
         const replyActorDef = this.ctx.makeReplyActor(this.ctx.address + '/asking:' + this.address + '/' + (options && options.id || this.__jobCounter++));
-        // the actor may be handling a different message when this one returns
         const replyActorRef = this.ctx.actorOf(replyActorDef);
         const timeoutPromise = delay(options && options.timeout || 1000)
             .then(() => {
@@ -28,7 +27,7 @@ export class ActorRefImpl<T> implements ChildActorRef<T> {
             });
         try {
             // send the request with custom replyTo
-            this.system.sendMessage({to: this.address, body, replyTo: replyActorRef!.address});
+            this.system.sendMessage({to: this.address, body, replyTo: replyActorRef.address});
             return await Promise.race([
                 replyActorDef.reply,
                 timeoutPromise

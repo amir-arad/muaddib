@@ -19,7 +19,7 @@ function resolveProvider<T>(provider: AnyProvisioning<T>): Awaitable<T> {
     }
 }
 
-// TODO: handle singleton scope
+// TODO: implement singleton scope
 export class Container<T> implements BindContext<T>, ResolveContext<T> {
     private readonly provisioning = new Map<keyof T, Set<AnyProvisioning<T[keyof T]>>>();
 

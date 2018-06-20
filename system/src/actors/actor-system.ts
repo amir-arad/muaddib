@@ -17,7 +17,7 @@ const rootActorDefinition: ActorDef<any, any, any> = {
     create: nullActor
 };
 
-// TODO: supervision
+// TODO : supervision
 export class ActorSystemImpl<D> implements ActorSystem<D> {
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;

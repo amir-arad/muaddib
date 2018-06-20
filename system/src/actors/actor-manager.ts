@@ -30,7 +30,7 @@ export class ActorManager<P, M> {
     }
 
     private initActorSync(actor: Actor<M>) {
-        // TODO allow actor to add custom rxjs operators for its mailbox
+        // TODO : allow actor to add custom rxjs operators for its mailbox
         const actorHandleMessage = async (m: Message<M>) => {
             try {
                 this.context.startMessageScope(m);
