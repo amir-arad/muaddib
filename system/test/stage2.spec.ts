@@ -6,39 +6,33 @@ import {expect, plan} from "./testkit/chai.spec";
 namespace computation {
     // this is a feature plugin module
     // with its own plugins (of type `Operation`)
-
     /**
      * key to register plugins for computation
      */
     export const opSymbol = Symbol('operations');
-
     /**
      * plugin type for `opSymbol`, expected by computation
      */
     export type Operation = (i: number) => number;
-
-    /**
-     * input for initializing computation
-     */
-    export type Props = {
-        id: string;
-    };
-
     /**
      * system context signature required by computation
      */
     export type Context = {
         [computation.opSymbol]: Operation
     };
-
     /**
      * messages API of computation
      */
     export namespace messages {
         export type ComputationRequest = { arg: number };
-        export type All = ComputationRequest;
+        export type Input = ComputationRequest;
     }
-
+    /**
+     * input for initializing computation
+     */
+    export type Props = {
+        id: string;
+    };
     /**
      * definition of the actor that provides computation
      */
@@ -46,8 +40,7 @@ namespace computation {
         address({id}: Props) {
             return `computation:${id}`
         },
-
-        async create(ctx: ActorContext<messages.All, Context>) {
+        async create(ctx: ActorContext<messages.Input, Context>) {
             const plugins = await ctx.get(opSymbol, Quantity.any);
             return (msg: messages.ComputationRequest) => {
                 if (ctx.replyTo) {
@@ -65,11 +58,9 @@ describe('system', () => {
     describe('stage 2 - plugin objects', () => {
         it(`2nd level plugins`, plan(1, async () => {
             const actorKey = 'theActor';
+            type SystemOnlyContext = { [actorKey]: typeof computation.Actor; };
 
-            type SystemContext = computation.Context &
-                {
-                    [actorKey]: typeof computation.Actor;
-                }
+            type SystemContext = computation.Context & SystemOnlyContext;
 
             const p1: computation.Operation = (i: number) => i + 1;
             const p2: computation.Operation = (i: number) => i - 53;
@@ -77,7 +68,7 @@ describe('system', () => {
             const system = createActorSystem<SystemContext>();
 
             system.log.subscribe(m => console.log(JSON.stringify(m)));
-            system.set({key: 'theActor', value: computation.Actor});
+            system.set({key: actorKey, value: computation.Actor});
             system.set({key: computation.opSymbol, value: p1});
             system.set({key: computation.opSymbol, value: p2});
             await system.run(async ctx => {

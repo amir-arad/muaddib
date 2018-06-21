@@ -1,4 +1,4 @@
-export type Index = string | symbol;
+export type Index = string | symbol | number;
 
 export enum Quantity {optional, single, any}
 

@@ -2,7 +2,8 @@ import {Subject} from "rxjs";
 import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
-import {BindContext, ResolveContext} from "../dependencies/types";
+import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
+import {Container} from "../dependencies/dependencies";
 
 /**
  * create a no-operation function actor for given actor context
@@ -22,13 +23,18 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     private localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
-    public readonly set: BindContext<D>['set'];
     public readonly log = new Subject<SystemLogEvents>();
+    private boundGet: Container<D>['get'];
 
-    constructor(container: ResolveContext<D> & BindContext<D>) {
-        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', container.get.bind(container));
+    constructor(private container: ResolveContext<D> & BindContext<D>) {
+        this.boundGet = container.get.bind(container);
+        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.boundGet);
         this.run = this.rootContext.run.bind(this.rootContext);
-        this.set = container.set.bind(container);
+    }
+
+    set<P extends keyof D>(provisioning: ProvisioningPath<P> & AnyProvisioning<D[P]>): void {
+        this.log.next({type: 'ProvisioningSet', key: provisioning.key.toString()});
+        return this.container.set(provisioning as any);
     }
 
     stopActor(address: Address) {
@@ -66,9 +72,9 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         return newAddress;
     }
 
-    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P, context: ActorContextImpl<any, D>) {
+    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P) {
         const newAddress = this.makeNewAddress(ctor, props);
-        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, context.get);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.boundGet);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;

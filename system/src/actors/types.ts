@@ -1,5 +1,5 @@
 import {Observable} from 'rxjs';
-import {BindContext, ResolveContext} from "../dependencies/types";
+import {BindContext, Index, Quantity, ResolveContext} from "../dependencies/types";
 
 export interface ActorRef<T> {
     address: Address;
@@ -124,10 +124,33 @@ export interface ActorDestroyed {
     address: Address;
 }
 
+export interface ProvisioningSet {
+    type: 'ProvisioningSet';
+    key: Index;
+}
+
+export interface ProvisioningSupplied {
+    type: 'ProvisioningSupplied';
+    consumer: Address;
+    key: Index;
+    quantity: string;
+}
+
+export interface ProvisioningSupplyError {
+    type: 'ProvisioningSupplyError';
+    consumer: Address;
+    key: Index;
+    quantity: string;
+    error: Error;
+}
+
 export type SystemLogEvents =
     MessageSent
     | UndeliveredMessage
     | UnhandledMessage
     | ActorCreated
     | ActorDestroyed
+    | ProvisioningSet
+    | ProvisioningSupplied
+    | ProvisioningSupplyError
     | LogEvent;
