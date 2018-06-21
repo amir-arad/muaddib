@@ -142,7 +142,7 @@ export interface ProvisioningSupplyError {
     consumer: Address;
     key: Index;
     quantity: string;
-    error: Error;
+    error: string;
 }
 
 export type SystemLogEvents =

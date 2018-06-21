@@ -34,9 +34,9 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
             const resultSize = result === null ? 0 : Array.isArray(result)? result.length : 1;
             this.system.log.next({type: 'ProvisioningSupplied', consumer: this.address, key : key.toString(), resultSize : resultSize, quantity : Quantity[quantity]});
             return result;
-        } catch (error) {
-            this.system.log.next({type: 'ProvisioningSupplyError', consumer: this.address, key : key.toString(), quantity : Quantity[quantity], error});
-            throw error;
+        } catch (errorObj) {
+            this.system.log.next({type: 'ProvisioningSupplyError', consumer: this.address, key : key.toString(), quantity : Quantity[quantity], error: errorObj.message});
+            throw errorObj;
         }
     }
 

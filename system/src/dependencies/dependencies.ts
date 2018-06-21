@@ -47,11 +47,11 @@ export class Container<T> implements BindContext<T>, ResolveContext<T> {
         if (quantity === Quantity.any) {
             return await Promise.all(result);
         } else if (result.length > 1) {
-            throw new Error(`Ambiguity: found ${result.length} matches for ${key}`);
+            throw new Error(`Ambiguity: found ${result.length} matches for ${key.toString()}`);
         } else if (result.length === 1) {
             return await result[0];
         } else if (quantity === Quantity.single) {
-            throw new Error(`Not found: ${key}`);
+            throw new Error(`Not found: ${key.toString()}`);
         } else {
             return null;
         }
