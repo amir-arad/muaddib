@@ -32,6 +32,6 @@
     "socket.io": "^2.0.4"
   },
   "peerDependencies": {
-    "tslib": "~1.7.1"
+    "tslib": "~1.9.2"
   }
 }

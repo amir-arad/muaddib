@@ -1,6 +1,6 @@
 import {expect, plan} from "./testkit/chai.spec";
 import {ActorContext, ActorRef, createActorSystem} from "../src";
-import {ActorObject, MessageAndContext} from "../src/types";
+import {ActorObject, MessageAndContext} from "../src";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
@@ -24,7 +24,7 @@ describe('system', () => {
                 static address = 'greeter';
                 greeting = "";
 
-                constructor(private ctx: ActorContext<WhoToGreet | Greet>) {
+                constructor(private ctx: ActorContext<WhoToGreet | Greet, {}>) {
                 }
 
                 onReceive(msg: WhoToGreet | Greet) {
@@ -93,7 +93,7 @@ describe('system', () => {
                 address({id}: { id: string }) {
                     return `Account:${id}`
                 },
-                async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, props: { balance: number }) {
+                async create(ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance, {}>, props: { balance: number }) {
                     await randomDelay(); // fake dynamic import
                     return new AccountImpl(ctx, props);
                 }
@@ -102,7 +102,7 @@ describe('system', () => {
             class AccountImpl implements ActorObject<ChangeBalance | CheckBalance | SetBalance> {
                 balance: number;
 
-                constructor(private ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance>, {balance}: { balance: number }) {
+                constructor(private ctx: ActorContext<ChangeBalance | CheckBalance | SetBalance, {}>, {balance}: { balance: number }) {
                     this.balance = balance;
                 }
 
@@ -181,7 +181,7 @@ describe('system', () => {
                 class Bank implements ActorObject<OpenAccount | Transfer | CheckBalance> {
                     static address = 'bank';
 
-                    constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance>) {
+                    constructor(private ctx: ActorContext<OpenAccount | Transfer | CheckBalance, {}>) {
                     }
 
                     onReceive(msg: OpenAccount | Transfer | CheckBalance) {

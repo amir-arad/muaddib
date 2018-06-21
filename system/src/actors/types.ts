@@ -1,5 +1,5 @@
-import {ActorSystem} from "./index";
 import {Observable} from 'rxjs';
+import {BindContext, Index, Quantity, ResolveContext} from "../dependencies/types";
 
 export interface ActorRef<T> {
     address: Address;
@@ -23,22 +23,25 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface ActorSystem {
+export interface ActorSystem<D> extends BindContext<D> {
     log: Observable<SystemLogEvents>;
 
-    run(script: (ctx: ActorContext<never>) => void | Promise<void>, address?: Address): Promise<void>;
+    run: ActorContext<never, D>['run'];
 }
 
-export interface ActorContext<T> extends MessageContext {
+export interface ActorContext<T, D> extends MessageContext, ResolveContext<D> {
+
     log(...args: any[]): void;
+
+    run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void>;
 
     self: ActorRef<T>;
 
     stop(): void;
 
-    actorOf<M>(ctor: ActorDef<void, M>): ChildActorRef<M>;
+    actorOf<M>(ctor: ActorDef<void, M, D>): ChildActorRef<M>;
 
-    actorOf<P, M>(ctor: ActorDef<P, M>, props: P): ChildActorRef<M>;
+    actorOf<P, M>(ctor: ActorDef<P, M, D>, props: P): ChildActorRef<M>;
 
     actorFor(addr: Address): ActorRef<any>;
 
@@ -48,23 +51,23 @@ export function isPromiseLike(subj: any): subj is PromiseLike<any> {
     return Boolean(subj && typeof subj.then === 'function');
 }
 
-export interface ActorFactory<P, M> {
-    create(ctx: ActorContext<M>, props: P): Actor<M> | Promise<Actor<M>>;
+export interface ActorFactory<P, M, D> {
+    create(ctx: ActorContext<M, D>, props: P): Actor<M> | Promise<Actor<M>>;
 }
 
-export interface ActorClass<P, M> {
-    new(ctx: ActorContext<M>, props: P): ActorObject<M>;
+export interface ActorClass<P, M, D> {
+    new(ctx: ActorContext<M, D>, props: P): ActorObject<M>;
 }
 
-export function isActorFactory<P, M>(subj: ActorDef<P, M>): subj is ActorFactory<P, M> & ActorMetadata<P> {
+export function isActorFactory<P, M, D>(subj: ActorDef<P, M, D>): subj is ActorFactory<P, M, D> & ActorMetadata<P> {
     return typeof (subj as any).create === 'function';
 }
 
 export interface ActorMetadata<P> {
-    address: P extends void ? Address : (props: P) => Address
+    address: P extends void ? Address : Address | ((props: P) => Address)
 }
 
-export type ActorDef<P = void, M = any> = ActorMetadata<P> & (ActorFactory<P, M> | ActorClass<P, M>);
+export type ActorDef<P, M, D> = ActorMetadata<P> & (ActorFactory<P, M, D> | ActorClass<P, M, D>);
 
 export type Actor<M extends Serializable> = ActorObject<M> | ActorFunction<M>;
 
@@ -121,10 +124,34 @@ export interface ActorDestroyed {
     address: Address;
 }
 
+export interface ProvisioningSet {
+    type: 'ProvisioningSet';
+    key: Index;
+}
+
+export interface ProvisioningSupplied {
+    type: 'ProvisioningSupplied';
+    consumer: Address;
+    key: Index;
+    resultSize: number;
+    quantity: string;
+}
+
+export interface ProvisioningSupplyError {
+    type: 'ProvisioningSupplyError';
+    consumer: Address;
+    key: Index;
+    quantity: string;
+    error: string;
+}
+
 export type SystemLogEvents =
     MessageSent
     | UndeliveredMessage
     | UnhandledMessage
     | ActorCreated
     | ActorDestroyed
+    | ProvisioningSet
+    | ProvisioningSupplied
+    | ProvisioningSupplyError
     | LogEvent;
