@@ -28,10 +28,11 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     get<P extends keyof D>(key: P, quantity: Quantity.optional): Promise<D[P]>;
     get<P extends keyof D>(key: P, quantity: Quantity.single): Promise<D[P]>;
     get<P extends keyof D>(key: P, quantity: Quantity.any): Promise<Array<D[P]>>;
-    get<P extends keyof D>(key: P, quantity: Quantity = Quantity.any): Promise<null | D[P] | Array<D[P]>> {
+    async get<P extends keyof D>(key: P, quantity: Quantity = Quantity.any): Promise<null | D[P] | Array<D[P]>> {
         try {
-            const result = this.getImpl(key, quantity as any);
-            this.system.log.next({type: 'ProvisioningSupplied', consumer: this.address, key : key.toString(), quantity : Quantity[quantity]});
+            const result = await this.getImpl(key, quantity as any);
+            const resultSize = result === null ? 0 : Array.isArray(result)? result.length : 1;
+            this.system.log.next({type: 'ProvisioningSupplied', consumer: this.address, key : key.toString(), resultSize : resultSize, quantity : Quantity[quantity]});
             return result;
         } catch (error) {
             this.system.log.next({type: 'ProvisioningSupplyError', consumer: this.address, key : key.toString(), quantity : Quantity[quantity], error});

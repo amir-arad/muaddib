@@ -54,6 +54,10 @@ namespace computation {
     };
 }
 
+function randomDelay() {
+    return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
+}
+
 describe('system', () => {
     describe('stage 2 - plugin objects', () => {
         it(`2nd level plugins`, plan(1, async () => {
@@ -70,7 +74,7 @@ describe('system', () => {
             system.log.subscribe(m => console.log(JSON.stringify(m)));
             system.set({key: actorKey, value: computation.Actor});
             system.set({key: computation.opSymbol, value: p1});
-            system.set({key: computation.opSymbol, value: p2});
+            system.set({key: computation.opSymbol, asyncFactory: () => randomDelay().then(()=> p2)});
             await system.run(async ctx => {
                 const actor = await ctx.get(actorKey, Quantity.single);
                 const firstProcessor = ctx.actorOf(actor, {id: 'first'});

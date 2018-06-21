@@ -133,6 +133,7 @@ export interface ProvisioningSupplied {
     type: 'ProvisioningSupplied';
     consumer: Address;
     key: Index;
+    resultSize: number;
     quantity: string;
 }
 
