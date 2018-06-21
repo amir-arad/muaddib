@@ -67,6 +67,7 @@ export type MessageTypeMap = {
     'reject': RejectMessage;
     'dispose': DisposeMessage;
 }
+export type Messages = MessageTypeMap[keyof MessageTypeMap];
 
 function isMessageType<T extends keyof MessageTypeMap>(t: T, m: Message): m is MessageTypeMap[T] {
     return m.type === t;
@@ -78,13 +79,12 @@ export interface ConnectionConfig {
     target: Endpoint;
 }
 
+export type PartiaMessageEvent = {data: Message};
 export interface Endpoint {
-    postMessage(message: Serializable): void
+    postMessage(message: Messages): void
 
-    //   postMessage(message: any, transfer?: any[]): void;
-    addEventListener(type: 'message', handler: (event: MessageEvent) => void): void;
+    addEventListener(type: 'message', handler: (event: PartiaMessageEvent) => void): void;
 
-    //   addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: {}): void;
     removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: {}): void;
 }
 
@@ -134,10 +134,10 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
     let otherTargets: string[] = [];
     const wrappedOfferedApi = {api: offeredAPI};
     let proxyCreated = false;
-    let remoteApi:RemoteApiData
+    let remoteApi: RemoteApiData
     remoteApi = await new Promise<RemoteApiData>((resolveConnection) => {
 
-        config.target.addEventListener('message', (event: MessageEvent) => {
+        config.target.addEventListener('message', (event: { data: Message }) => {
             const payload: Message = extractMessage(event);
             if (payload.senderId !== config.otherSideId) {
                 return;
@@ -153,7 +153,7 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
                 resolveConnection(buildProxy(config, otherTargets, wrappedOfferedApi));
             } else if (isMessageType('handshake-confirm', payload)) {
                 otherTargets = payload.targets;
-                if(!proxyCreated){
+                if (!proxyCreated) {
                     resolveConnection(buildProxy(config, otherTargets, wrappedOfferedApi));
                 }
             }
@@ -199,7 +199,7 @@ function nextId() {
 
 type PendingCB = { id: number, resolve: Function, reject: Function, toString(): string };
 
-function extractMessage(event: MessageEvent): Message {
+function extractMessage(event: { data: Message }): Message {
     let payload: Message = event.data;
     if (isMessageType('wrapped', payload)) {
         payload = payload.inner;
@@ -266,7 +266,7 @@ function buildProxy(config: ConnectionConfig, targets: Targets, offeredAPI: { ap
     });
 
 
-    const messageListener = async (event: MessageEvent) => {
+    const messageListener = async (event: { data: Message }) => {
         const payload = extractMessage(event);
         // console.log('got:'+ (payload as any).id + config.thisSideId + '->' + config.otherSideId + ':', payload.type, (payload as any).target || (payload as any).description || '')//JSON.stringify(message, null, 4))
         // console.log(config.otherSideId + '->' + config.thisSideId + ':', payload.type, JSON.stringify(payload, null, 4))
@@ -284,7 +284,7 @@ function buildProxy(config: ConnectionConfig, targets: Targets, offeredAPI: { ap
             let method = offeredAPI.api[payload.target];
             if (method) {
                 let message: Message;
-                 try {
+                try {
                     const res = await method.apply(offeredAPI.api, payload.arguments);
                     message = <ResolveMessage>{
                         type: 'resolve',
@@ -321,7 +321,7 @@ function buildProxy(config: ConnectionConfig, targets: Targets, offeredAPI: { ap
         } else if (isMessageType('resolve', payload)) {
             const pendingIndex = pendingCallbacks.findIndex((pending) => pending.id === payload.id);
             if (pendingIndex === -1) {
-                console.error('simple-link unexpected callback:'+ (payload as any).id + config.thisSideId + '->' + config.otherSideId + ':', payload.type, (payload as any).target || (payload as any).description || '' + JSON.stringify(event, null, 4));
+                console.error('simple-link unexpected callback:' + (payload as any).id + config.thisSideId + '->' + config.otherSideId + ':', payload.type, (payload as any).target || (payload as any).description || '' + JSON.stringify(event, null, 4));
                 throw(new Error('simple-link unexpected callback ' + payload.description))
             }
             const cb = pendingCallbacks.splice(pendingIndex, 1)[0];
@@ -329,7 +329,7 @@ function buildProxy(config: ConnectionConfig, targets: Targets, offeredAPI: { ap
         } else if (isMessageType('reject', payload)) {
             const pendingIndex = pendingCallbacks.findIndex((pending) => pending.id === payload.id);
             if (pendingIndex === -1) {
-                console.error('simple-link unexpected callback rejection:'+ (payload as any).id + config.thisSideId + '->' + config.otherSideId + ':', payload.type, (payload as any).target || (payload as any).description || '' + JSON.stringify(event, null, 4));
+                console.error('simple-link unexpected callback rejection:' + (payload as any).id + config.thisSideId + '->' + config.otherSideId + ':', payload.type, (payload as any).target || (payload as any).description || '' + JSON.stringify(event, null, 4));
                 throw(new Error('simple-link unexpected callback rejection ' + payload.description));
             }
             const cb = pendingCallbacks.splice(pendingIndex, 1)[0];
@@ -362,12 +362,12 @@ export class NoFeedbackEndpoint implements Endpoint {
 
     }
 
-    postMessage(inner: Serializable): void {
+    postMessage(inner: Messages): void {
         this.ep.postMessage({type: 'wrapped', senderId: this.id, inner});
     }
 
-    addEventListener(type: 'message', handler: (event: MessageEvent) => void): void {
-        const wrappedListener = (event: MessageEvent) => {
+    addEventListener(type: 'message', handler: (event: { data: Message }) => void): void {
+        const wrappedListener = (event: { data: Message }) => {
             if (!isMessageType('wrapped', event.data) || event.data.senderId !== this.id) {
                 handler(event);
             }
@@ -393,7 +393,7 @@ export function windowEndpoint(targetWindow: Window, sourceWindow: Window = self
     const listeners: { orig: any, wrapped: any }[] = [];
     return {
         sourceWindow, targetWindow, // for debugging
-        addEventListener(type: 'message', handler: (event: MessageEvent) => void) {
+        addEventListener(type: 'message', handler: (event: { data: Message }) => void) {
             const wrappedListener = (event: MessageEvent) => {
                 if (targetWindow === event.source) {
                     handler(event);
@@ -413,10 +413,9 @@ export function windowEndpoint(targetWindow: Window, sourceWindow: Window = self
             const listenerObj = listeners.splice(idx, 1)[0];
             sourceWindow.removeEventListener(type, listenerObj.wrapped)
         },
-        postMessage: (message: Serializable) => targetWindow.postMessage(message, '*'),
+        postMessage: (message: Message) => targetWindow.postMessage(message, '*'),
     } as Endpoint;
 }
-
 
 
 export function disposeConnection(proxy: any) {

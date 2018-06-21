@@ -19,7 +19,7 @@ describe('system', () => {
 
             const system = createActorSystem<SystemContext>();
 
-            system.log.subscribe(m => console.log(JSON.stringify(m)));
+            // system.log.subscribe(m => console.log(JSON.stringify(m)));
             system.set({key: actorKey, value: Actor});
             system.set({key: opSymbol, value: p1});
             system.set({key: opSymbol, asyncFactory: () => randomDelay().then(() => p2)});
