@@ -25,16 +25,22 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
 
 export type AddressChangeEvent = {}
 
-export interface RemoteSystem {
+export interface SystemNetworkApi {
     name(): Promise<string>;
 
-    onAddressChange(handler: (m: AddressChangeEvent) => void): void;
+    getAllAddresses(): Promise<Array<Address>>;
+
+    onAddAddress(otherSystemName: string, address: Address): void;
+
+    onRemoveAddress(otherSystemName: string, address: Address): void;
+
+    sendMessage(message: Message<any>): void;
 }
 
 export interface ActorSystem<D> extends BindContext<D> {
-    remoteApi: RemoteSystem;
+    remoteApi: SystemNetworkApi;
 
-    connectTo(other: RemoteSystem): void;
+    connectTo(other: SystemNetworkApi): void;
 
     log: Observable<SystemLogEvents>;
 

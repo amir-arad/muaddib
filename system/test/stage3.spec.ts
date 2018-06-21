@@ -1,4 +1,4 @@
-import {ActorSystem, createActorSystem, RemoteSystem} from "../src";
+import {ActorSystem, createActorSystem, SystemNetworkApi} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation'
 import {Channel} from "./simple-link.spec";
@@ -9,7 +9,7 @@ function randomDelay() {
 }
 
 async function connectSystem(system: ActorSystem<any>, connection: ConnectionConfig) {
-    system.connectTo(await connect<RemoteSystem>(connection, system.remoteApi));
+    await system.connectTo(await connect<SystemNetworkApi>(connection, system.remoteApi));
 }
 
 describe('system', () => {
@@ -26,7 +26,7 @@ describe('system', () => {
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
             // consumerSystem.log.subscribe(m => console.log(JSON.stringify(m)));
 
-            const channel = new Channel('medium1');
+            const channel = new Channel('medium');
 
             // connect both systems
             await Promise.all([
