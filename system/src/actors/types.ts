@@ -1,5 +1,5 @@
 import {Observable} from 'rxjs';
-import {BindContext, Index, Quantity, ResolveContext} from "../dependencies/types";
+import {BindContext, Index, ResolveContext} from "../dependencies/types";
 
 export interface ActorRef<T> {
     address: Address;
@@ -23,7 +23,19 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
+export type AddressChangeEvent = {}
+
+export interface RemoteSystem {
+    name(): Promise<string>;
+
+    onAddressChange(handler: (m: AddressChangeEvent) => void): void;
+}
+
 export interface ActorSystem<D> extends BindContext<D> {
+    remoteApi: RemoteSystem;
+
+    connectTo(other: RemoteSystem): void;
+
     log: Observable<SystemLogEvents>;
 
     run: ActorContext<never, D>['run'];
@@ -41,7 +53,7 @@ export interface ActorContext<T, D> extends MessageContext, ResolveContext<D> {
 
     actorOf<M>(ctor: ActorDef<void, M, D>): ChildActorRef<M>;
 
-    actorOf<P, M>(ctor: ActorDef<P, M, D>, props: P): ChildActorRef<M>;
+    actorOf<P, M1>(ctor: ActorDef<P, M1, D>, props: P): ChildActorRef<M1>;
 
     actorFor(addr: Address): ActorRef<any>;
 

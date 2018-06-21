@@ -1,5 +1,16 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
+import {
+    ActorContext,
+    ActorDef,
+    ActorFunction,
+    ActorObject,
+    ActorSystem,
+    Address,
+    AddressChangeEvent,
+    Message,
+    RemoteSystem,
+    SystemLogEvents
+} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
@@ -18,6 +29,48 @@ const rootActorDefinition: ActorDef<any, any, any> = {
     create: nullActor
 };
 
+
+/**
+ * this actor should receive all messages that shouyld be sent to the remote system, and forward them
+ */
+class RemoteSystemImpl implements RemoteSystem {
+
+    constructor(private system: ActorSystemImpl<any>) {
+    }
+
+    async name(): Promise<string> {
+        return this.system.name;
+    }
+
+    // TODO: implement
+    onAddressChange(handler: (m: AddressChangeEvent) => void) {
+
+    }
+}
+
+/**
+ * this actor should receive all messages that should be sent to the remote system, and forward them
+ */
+// TODO: (idea) use DI to share internal state of system with this actor?
+class RemoteSystemActor implements ActorObject<AddressChangeEvent> {
+    static address(p: { name: string }) {
+        return `remote:${p.name}`;
+    }
+
+    private system: RemoteSystem;
+
+    constructor(ctx: ActorContext<AddressChangeEvent, any>, p: { name: string, system: RemoteSystem }) {
+        this.system = p.system;
+    }
+
+    onReceive(message: AddressChangeEvent): void | Promise<void> {
+        // TODO: also handle incoming messages to be forwarded to remote system
+        // TODO: manage registration of self to local system's address book
+        // perhaps alias mechanism?
+        return undefined;
+    }
+}
+
 // TODO : supervision
 export class ActorSystemImpl<D> implements ActorSystem<D> {
     private localActors: { [a: string]: ActorManager<any, any> } = {};
@@ -25,11 +78,21 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
     private boundGet: Container<D>['get'];
+    public readonly remoteApi: RemoteSystemImpl;
 
-    constructor(private container: ResolveContext<D> & BindContext<D>) {
+    constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
         this.boundGet = container.get.bind(container);
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.boundGet);
         this.run = this.rootContext.run.bind(this.rootContext);
+        this.remoteApi = new RemoteSystemImpl(this);
+    }
+
+    async connectTo(remoteSystem: RemoteSystem) {
+        const name = await remoteSystem.name();
+        const remoteSystemRef = this.rootContext.actorOf(RemoteSystemActor, {name, system: remoteSystem});
+        remoteSystem.onAddressChange((m: AddressChangeEvent) => {
+            remoteSystemRef.send(m);
+        });
     }
 
     set<P extends keyof D>(provisioning: ProvisioningPath<P> & AnyProvisioning<D[P]>): void {

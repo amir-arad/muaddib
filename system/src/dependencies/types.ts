@@ -46,7 +46,7 @@ export interface BindContext<T> {
 }
 
 export interface ResolveContext<T> {
-    get<T1 extends keyof T>(key: T1): Promise<T[T1][]>;
+    get<T1 extends keyof T>(key: T1): Promise<Array<T[T1]>>;
 
     get<T1 extends keyof T>(key: T1, quantity: Quantity.optional): Promise<T[T1]>;
 
