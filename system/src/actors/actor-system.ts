@@ -27,21 +27,19 @@ const rootActorDefinition: ActorDef<any, any, any> = {
     create: nullActor
 };
 
-
-/**
- * this actor should receive all messages that shouyld be sent to the remote system, and forward them
- */
 class RemoteSystemImpl implements SystemNetworkApi {
 
     constructor(private system: ActorSystemImpl<any>) {
     }
 
+    // TODO: change to property that is transfered with the object
     name = (): Promise<string> => {
         return Promise.resolve(this.system.name);
     };
 
+    // TODO: change to property that is transfered with the object
     getAllAddresses = (): Promise<Array<Address>> => {
-        return Promise.resolve(Array.from(new Set(this.system.addressBook.entries.map(e => e.address))));// Object.keys(this.system.localActors).concat();
+        return Promise.resolve(this.system.addressBook.getAllAddresses());
     };
 
     sendMessage = (message: Message<any>): void => {
@@ -63,6 +61,9 @@ interface AddressBookEntry {
     address: Address;
 }
 
+/**
+ * manage all addresses known to a system
+ */
 class AddressBook {
     public entries: AddressBookEntry[] = [];
     public systems: { [systemName: string]: SystemNetworkApi } = {};
@@ -70,11 +71,15 @@ class AddressBook {
     constructor(private localSystemName: string) {
     }
 
+    getAllAddresses() {
+        return Array.from(new Set(this.entries.map(e => e.address)))
+    }
+
     addAddress(systemName: string, address: Address) {
         this.entries.push({systemName, system: this.systems[systemName], address});
         Object.keys(this.systems)
             .forEach(sn => {
-                sn !== systemName && sn !== this.localSystemName && this.systems[sn].onAddAddress(this.localSystemName, address);
+                sn !== systemName && this.systems[sn].onAddAddress(this.localSystemName, address);
             })
     }
 
@@ -82,7 +87,7 @@ class AddressBook {
         this.entries = this.entries.filter(e => e.address === address && e.systemName === systemName);
         Object.keys(this.systems)
             .forEach(sn => {
-                sn !== systemName && sn !== this.localSystemName && this.systems[sn].onRemoveAddress(this.localSystemName, address)
+                sn !== systemName && this.systems[sn].onRemoveAddress(this.localSystemName, address)
             });
     }
 
