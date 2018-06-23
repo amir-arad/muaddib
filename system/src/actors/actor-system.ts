@@ -41,7 +41,7 @@ class RemoteSystemImpl implements SystemNetworkApi {
     };
 
     getAllAddresses = (): Promise<Array<Address>> => {
-        return Promise.resolve(Object.keys(this.system.localActors).concat(Array.from(new Set(this.system.addressBook.entries.map(e => e.address)))));
+        return Promise.resolve(Array.from(new Set(this.system.addressBook.entries.map(e => e.address))));// Object.keys(this.system.localActors).concat();
     };
 
     sendMessage = (message: Message<any>): void => {
@@ -70,10 +70,6 @@ class AddressBook {
     constructor(private localSystemName: string) {
     }
 
-    addRemoteSystem(systemName: string, remoteSystem: SystemNetworkApi) {
-        this.systems[systemName] = remoteSystem;
-    }
-
     addAddress(systemName: string, address: Address) {
         this.entries.push({systemName, system: this.systems[systemName], address});
         Object.keys(this.systems)
@@ -88,6 +84,10 @@ class AddressBook {
             .forEach(sn => {
                 sn !== systemName && sn !== this.localSystemName && this.systems[sn].onRemoveAddress(this.localSystemName, address)
             });
+    }
+
+    addRemoteSystem(systemName: string, remoteSystem: SystemNetworkApi) {
+        this.systems[systemName] = remoteSystem;
     }
 
     getRemoteSystemByAddress(address: Address) {
@@ -113,7 +113,6 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         this.run = this.rootContext.run.bind(this.rootContext);
         this.remoteApi = new RemoteSystemImpl(this);
         this.addressBook = new AddressBook(this.name);
-        this.addressBook.addRemoteSystem(this.name, this.remoteApi);
     }
 
     async connectTo(remoteSystem: SystemNetworkApi) {
@@ -149,10 +148,12 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
 
     sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
+        // if the message is for a local actor, send it directly
         const localRecepient = this.localActors[message.to];
         if (localRecepient) {
             localRecepient.sendMessage(message);
         } else {
+            // look for another system to send the message to
             const otherSystem = this.addressBook.getRemoteSystemByAddress(message.to);
             if (otherSystem) {
                 otherSystem.sendMessage(message);

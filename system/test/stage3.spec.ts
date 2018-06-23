@@ -18,7 +18,7 @@ describe('system', () => {
 
         const p1: computation.Operation = (i: number) => i + 1;
         const p2: computation.Operation = (i: number) => i - 53;
-        it.only(`load plugins in different systems that are connected to each other and have them communicate with each other`, plan(1, async () => {
+        it(`load plugins in different systems that are connected to each other and have them communicate with each other`, plan(1, async () => {
             const serviceSystem = createActorSystem<SystemContext>();
             const consumerSystem = createActorSystem();
 
@@ -48,9 +48,7 @@ describe('system', () => {
             });
 
         }));
-        it.only(`load plugins in different systems that are connected by proxy and have them all communicate with each other`, plan(1, async () => {
-
-
+        it(`load plugins in different systems that are connected by proxy and have them all communicate with each other`, plan(1, async () => {
             const serviceSystem = createActorSystem<SystemContext>('service'); // the system with the computation service
             const proxySystem = createActorSystem('proxy'); // a system that is connected to the other systems
             const consumerSystem = createActorSystem('consumer'); // a system that needs to use the computation service
