@@ -41,7 +41,7 @@ class RemoteSystemImpl implements SystemNetworkApi {
     };
 
     getAllAddresses = (): Promise<Array<Address>> => {
-        return Promise.resolve(Object.keys(this.system.localActors));
+        return Promise.resolve(Object.keys(this.system.localActors).concat(Array.from(new Set(this.system.addressBook.entries.map(e => e.address)))));
     };
 
     sendMessage = (message: Message<any>): void => {
@@ -49,11 +49,11 @@ class RemoteSystemImpl implements SystemNetworkApi {
     };
 
     onAddAddress = (otherSystemName: string, address: Address): void => {
-        this.system.remoteAddresses.addRemoteAddress(otherSystemName, address);
+        this.system.addressBook.addAddress(otherSystemName, address);
     };
 
     onRemoveAddress = (otherSystemName: string, address: Address): void => {
-        this.system.remoteAddresses.removeRemoteAddress(otherSystemName, address);
+        this.system.addressBook.removeAddress(otherSystemName, address);
     };
 }
 
@@ -67,18 +67,27 @@ class AddressBook {
     public entries: AddressBookEntry[] = [];
     public systems: { [systemName: string]: SystemNetworkApi } = {};
 
-    constructor(private localSyatemName: string) {}
+    constructor(private localSystemName: string) {
+    }
 
     addRemoteSystem(systemName: string, remoteSystem: SystemNetworkApi) {
         this.systems[systemName] = remoteSystem;
     }
 
-    addRemoteAddress(systemName: string, address: Address) {
+    addAddress(systemName: string, address: Address) {
         this.entries.push({systemName, system: this.systems[systemName], address});
+        Object.keys(this.systems)
+            .forEach(sn => {
+                sn !== systemName && sn !== this.localSystemName && this.systems[sn].onAddAddress(this.localSystemName, address);
+            })
     }
 
-    removeRemoteAddress(systemName: string, address: Address) {
+    removeAddress(systemName: string, address: Address) {
         this.entries = this.entries.filter(e => e.address === address && e.systemName === systemName);
+        Object.keys(this.systems)
+            .forEach(sn => {
+                sn !== systemName && sn !== this.localSystemName && this.systems[sn].onRemoveAddress(this.localSystemName, address)
+            });
     }
 
     getRemoteSystemByAddress(address: Address) {
@@ -86,20 +95,12 @@ class AddressBook {
         const entry = this.entries.find(e => e.address === address);
         return entry && entry.system;
     }
-
-    addLocalAddress(address: Address): void {
-        Object.keys(this.systems).forEach(sn => this.systems[sn].onAddAddress(this.localSyatemName, address))
-    }
-
-    removeLocalAddress(address: Address): void {
-        Object.keys(this.systems).forEach(sn => this.systems[sn].onRemoveAddress(this.localSyatemName, address))
-    }
 }
 
 // TODO : supervision
 export class ActorSystemImpl<D> implements ActorSystem<D> {
     public localActors: { [a: string]: ActorManager<any, any> } = {};
-    public remoteAddresses: AddressBook;
+    public addressBook: AddressBook;
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
@@ -111,14 +112,15 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.boundGet);
         this.run = this.rootContext.run.bind(this.rootContext);
         this.remoteApi = new RemoteSystemImpl(this);
-        this.remoteAddresses = new AddressBook(this.name);
+        this.addressBook = new AddressBook(this.name);
+        this.addressBook.addRemoteSystem(this.name, this.remoteApi);
     }
 
     async connectTo(remoteSystem: SystemNetworkApi) {
         const name = await remoteSystem.name();
-        this.remoteAddresses.addRemoteSystem(name, remoteSystem);
+        this.addressBook.addRemoteSystem(name, remoteSystem);
         const allAddresses = await remoteSystem.getAllAddresses();
-        allAddresses.forEach(a => this.remoteAddresses.addRemoteAddress(name, a));
+        allAddresses.forEach(a => this.addressBook.addAddress(name, a));
     }
 
     set<P extends keyof D>(provisioning: ProvisioningPath<P> & AnyProvisioning<D[P]>): void {
@@ -130,7 +132,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         const newAddress = this.makeNewAddress(ctor, props);
         const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.boundGet);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
-        this.remoteAddresses.addLocalAddress(newAddress);
+        this.addressBook.addAddress(this.name, newAddress);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
     }
@@ -140,7 +142,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
             actorMgr.stop();
-            this.remoteAddresses.removeLocalAddress(address);
+            this.addressBook.removeAddress(this.name, address);
             delete this.localActors[address];
         }
     }
@@ -151,7 +153,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         if (localRecepient) {
             localRecepient.sendMessage(message);
         } else {
-            const otherSystem = this.remoteAddresses.getRemoteSystemByAddress(message.to);
+            const otherSystem = this.addressBook.getRemoteSystemByAddress(message.to);
             if (otherSystem) {
                 otherSystem.sendMessage(message);
             } else {
