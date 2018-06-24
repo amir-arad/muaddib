@@ -1,44 +1,44 @@
-import * as socketIo  from 'socket.io';
-import { Endpoint } from "./index";
-import { serialize, deserialize } from './serializer';
-import {Serializable} from "./serializeable";
+import * as socketIo from 'socket.io';
+import {deserialize, serialize} from './serializer';
+import {Endpoint} from "./endpoint";
+import {Message} from "./message";
 
 
 function isEventListenerObject(obj: any): obj is EventListenerObject {
     return !!obj.handleEvent;
 }
 
-export function nodeSocketEndPoint(socket: SocketIO.Socket): Endpoint {
-    const handlers:Map<Function,Function> = new Map();
+export function nodeSocketEndPoint(socket: socketIo.Socket): Endpoint {
+    const handlers: Map<Function, Function> = new Map();
     return {
         addEventListener(type: 'message', handler: (event: MessageEvent) => void) {
-            if(handlers.has(handler)){
+            if (handlers.has(handler)) {
                 return;
             }
-            const wrappedHandler = (ev:MessageEvent)=>{
+            const wrappedHandler = (ev: MessageEvent) => {
                 handler({
-                    data:deserialize(ev.data)
+                    data: deserialize(ev.data)
                 } as any)
             }
-            handlers.set(handler,wrappedHandler);
-            socket.on(type,wrappedHandler);
+            handlers.set(handler, wrappedHandler);
+            socket.on(type, wrappedHandler);
         },
         removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: {}): void {
-            let handler:Function;
+            let handler: Function;
             if (isEventListenerObject(listener)) {
                 handler = listener.handleEvent;
             } else {
                 handler = listener;
             }
-            if(handlers.has(handler)){
+            if (handlers.has(handler)) {
                 socket.removeListener(type, handlers.get(handler) as any);
             }
         },
-        postMessage: (message: Serializable) => {
+        postMessage: (message: Message) => {
             // console.log('postMessage '+JSON.stringify(message,null,4))
             socket.emit('message', {
-                type:'message',
-                data:serialize(message)
+                type: 'message',
+                data: serialize(message)
             });
         },
     } as Endpoint;

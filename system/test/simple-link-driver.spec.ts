@@ -1,4 +1,4 @@
-import {connect, ConnectionConfig, Endpoint, Messages, PartiaMessageEvent} from "../../simple-link/src";
+import {connect, ConnectionConfig, Endpoint, Messages, PartiaMessageEvent} from "simple-link";
 import {Subject, Subscription} from "rxjs";
 import {expect} from "chai";
 

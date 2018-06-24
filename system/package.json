@@ -23,9 +23,10 @@
   "main": "dist/src/index.js",
   "browser": "dist/src/index.js",
   "scripts": {
+    "clean": "rimraf dist",
     "build": "tsc -d",
     "bundle": "webpack --progress",
-    "reset": "rimraf node_modules dist && yarn install && yarn test",
+    "reset": "yarn clean && yarn install && yarn test",
     "test": "run-s test:node test:browser:run",
     "test:node": "mocha --require ts-node/register/transpile-only --require test/setup.ts --require source-map-support/register test/*.spec.ts",
     "test:browser:run": "run-p -r start test:browser:run2",
@@ -38,6 +39,7 @@
     "tslib": "~1.9.2"
   },
   "dependencies": {
-    "rxjs": "^6.2.0"
+    "rxjs": "^6.2.0",
+    "simple-link" : "^0.0.1"
   }
 }

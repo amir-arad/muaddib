@@ -1,8 +1,8 @@
-import {ActorSystem, createActorSystem, SystemNetworkApi} from "../src";
+import {ActorSystem, createSystem, SystemNetworkApi} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation'
-import {Channel} from "./simple-link.spec";
-import {connect, ConnectionConfig} from "../../simple-link/src";
+import {Channel} from "./simple-link-driver.spec";
+import {connect, ConnectionConfig} from "simple-link";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
@@ -19,8 +19,8 @@ describe('system', () => {
         const p1: computation.Operation = (i: number) => i + 1;
         const p2: computation.Operation = (i: number) => i - 53;
         it(`load plugins in different systems that are connected to each other and have them communicate with each other`, plan(1, async () => {
-            const serviceSystem = createActorSystem<SystemContext>();
-            const consumerSystem = createActorSystem();
+            const serviceSystem = createSystem<SystemContext>();
+            const consumerSystem = createSystem();
 
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
             // consumerSystem.log.subscribe(m => console.log(JSON.stringify(m)));
@@ -49,9 +49,9 @@ describe('system', () => {
 
         }));
         it(`load plugins in different systems that are connected by proxy and have them all communicate with each other`, plan(1, async () => {
-            const serviceSystem = createActorSystem<SystemContext>('service'); // the system with the computation service
-            const proxySystem = createActorSystem('proxy'); // a system that is connected to the other systems
-            const consumerSystem = createActorSystem('consumer'); // a system that needs to use the computation service
+            const serviceSystem = createSystem<SystemContext>('service'); // the system with the computation service
+            const proxySystem = createSystem('proxy'); // a system that is connected to the other systems
+            const consumerSystem = createSystem('consumer'); // a system that needs to use the computation service
 
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
             // proxySystem.log.subscribe(m => console.log(JSON.stringify(m)));

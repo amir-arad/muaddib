@@ -1,4 +1,4 @@
-import {createActorSystem, Quantity} from "../src";
+import {createSystem, Quantity} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import {Actor, Context, messages, Operation, opSymbol} from './computation'
 
@@ -17,7 +17,7 @@ describe('system', () => {
             const p1: Operation = (i: number) => i + 1;
             const p2: Operation = (i: number) => i - 53;
 
-            const system = createActorSystem<SystemContext>();
+            const system = createSystem<SystemContext>();
 
             // system.log.subscribe(m => console.log(JSON.stringify(m)));
             system.set({key: actorKey, value: Actor});

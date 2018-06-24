@@ -7,6 +7,6 @@ export * from './dependencies/types'
 
 let counter = 0;
 
-export function createActorSystem<D>(name: string = 'System:' + (counter++), container: Container<D> = new Container()): ActorSystem<D> {
+export function createSystem<D>(name: string = 'System:' + (counter++), container: Container<D> = new Container()): ActorSystem<D> {
     return new ActorSystemImpl<D>(name, container);
 }
