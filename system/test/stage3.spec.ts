@@ -1,4 +1,4 @@
-import {ActorSystem, createSystem, SystemNetworkApi} from "../src";
+import {createSystem, SystemLinkEdge} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation'
 import {Channel} from "./simple-link-driver.spec";
@@ -8,8 +8,8 @@ function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
 }
 
-async function connectSystem(system: ActorSystem<any>, connection: ConnectionConfig) {
-    await system.connectTo(await connect<SystemNetworkApi>(connection, system.remoteApi));
+async function connectSystem(system: SystemLinkEdge, connection: ConnectionConfig) {
+    await system.connectTo(await connect<SystemLinkEdge>(connection, system));
 }
 
 describe('system', () => {
@@ -29,8 +29,8 @@ describe('system', () => {
 
             // connect both systems
             await Promise.all([
-                connectSystem(consumerSystem, channel.config1),
-                connectSystem(serviceSystem, channel.config2)
+                connectSystem(consumerSystem.edge, channel.config1),
+                connectSystem(serviceSystem.edge, channel.config2)
             ]);
 
             // bootstrap service in serviceSystem
@@ -63,11 +63,11 @@ describe('system', () => {
             // connect all systems
             await Promise.all([
                 // connect service to proxy via channelA
-                connectSystem(proxySystem, channelA.config1),
-                connectSystem(serviceSystem, channelA.config2),
+                connectSystem(proxySystem.edge, channelA.config1),
+                connectSystem(serviceSystem.edge, channelA.config2),
                 // connect consumer to proxy via channelB
-                connectSystem(consumerSystem, channelB.config1),
-                connectSystem(proxySystem, channelB.config2)
+                connectSystem(consumerSystem.edge, channelB.config1),
+                connectSystem(proxySystem.edge, channelB.config2)
             ]);
 
             // bootstrap service in serviceSystem

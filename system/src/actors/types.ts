@@ -7,7 +7,6 @@ export interface ActorRef<T> {
     send(body: T, replyTo?: ActorRef<any>): void;
 
     ask(body: T, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>>;
-
 }
 
 export interface ChildActorRef<T> extends ActorRef<T> {
@@ -23,9 +22,9 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export type AddressChangeEvent = {}
+export interface SystemLinkEdge {
+    connectTo(other: SystemLinkEdge): void;
 
-export interface SystemNetworkApi {
     name(): Promise<string>;
 
     getAllAddresses(): Promise<Array<Address>>;
@@ -38,9 +37,7 @@ export interface SystemNetworkApi {
 }
 
 export interface ActorSystem<D> extends BindContext<D> {
-    remoteApi: SystemNetworkApi;
-
-    connectTo(other: SystemNetworkApi): void;
+    edge: SystemLinkEdge;
 
     log: Observable<SystemLogEvents>;
 
