@@ -20,9 +20,8 @@ const connections: ConnectionData[] = [];
 
 export async function connect<ResAPI extends ExposableAPI>(config: ConnectionConfig, offeredAPI: ExposableAPI): Promise<ResAPI> {
     activateEndpoint(config.target);
-    const offeredCapabilites = getCapablities(offeredAPI);
-    let otherTargets: string[] = [];
-    const wrappedOfferedApi = {api: offeredAPI};
+    const offeredTargets = getTargets(offeredAPI);
+    const wrappedOfferedApi = {api: offeredAPI}; // de-reference the API object so it can be replaced by replaceLocalApi
     let proxyCreated = false;
     let remoteApi: RemoteApiData;
     remoteApi = await new Promise<RemoteApiData>((resolveConnection) => {
@@ -34,22 +33,20 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
             if (isMessageType('handshake', payload)) {
                 post(config, {
                     type: 'handshake-confirm',
-                    targets: offeredCapabilites,
+                    targets: offeredTargets,
                     senderId: config.thisSideId
                 });
-                otherTargets = payload.targets;
                 proxyCreated = true;
-                resolveConnection(buildProxy(config, otherTargets, wrappedOfferedApi));
+                resolveConnection(buildProxy(config, payload.targets, wrappedOfferedApi));
             } else if (isMessageType('handshake-confirm', payload)) {
-                otherTargets = payload.targets;
                 if (!proxyCreated) {
-                    resolveConnection(buildProxy(config, otherTargets, wrappedOfferedApi));
+                    resolveConnection(buildProxy(config, payload.targets, wrappedOfferedApi));
                 }
             }
         });
         post(config, {
             type: 'handshake',
-            targets: offeredCapabilites,
+            targets: offeredTargets,
             senderId: config.thisSideId
         });
     });
@@ -63,7 +60,7 @@ export async function connect<ResAPI extends ExposableAPI>(config: ConnectionCon
     return remoteApi.proxy;
 }
 
-function getCapablities(api: ExposableAPI): string[] {
+function getTargets(api: ExposableAPI): string[] {
     return Object.keys(api);
 }
 
