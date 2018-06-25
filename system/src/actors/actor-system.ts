@@ -3,8 +3,7 @@ import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, Sy
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
-import {Container} from "../dependencies/dependencies";
-import {SystemLinksManager} from "./system-link";
+import {NetworkManager} from "./network";
 
 /**
  * create a no-operation function actor for given actor context
@@ -25,12 +24,11 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
-    public readonly edge: SystemLinksManager;
+    public readonly netNode = new NetworkManager(this);
 
     constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);
         this.run = this.rootContext.run.bind(this.rootContext);
-        this.edge = new SystemLinksManager(this);
     }
 
     set<P extends keyof D>(provisioning: ProvisioningPath<P> & AnyProvisioning<D[P]>): void {
@@ -42,7 +40,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         const newAddress = this.makeNewAddress(ctor, props);
         const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.container.get);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
-        this.edge.onAddAddress(this.name, newAddress);
+        this.netNode.addAddress(this.name, newAddress);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
     }
@@ -52,7 +50,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
             actorMgr.stop();
-            this.edge.onRemoveAddress(this.name, address);
+            this.netNode.removeAddress(this.name, address);
             delete this.localActors[address];
         }
     }
@@ -71,7 +69,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
         // look for another system to send the message to
-        if (!this.edge.sendMessage(message)) {
+        if (!this.netNode.sendMessage(message)) {
             this.log.next({type: 'UndeliveredMessage', message});
             console.error(new Error(`unknown global address "${message.to}"`).stack);
         }

@@ -1,6 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, Index, ResolveContext} from "../dependencies/types";
-import {LocalEdge, LocalSystem} from "./system-link";
+import {LocalSystem, LinkMessage} from "./network";
 
 export interface ActorRef<T> {
     address: Address;
@@ -23,8 +23,14 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
+export interface NetworkNode {
+    connect(input: Observable<LinkMessage>): Observable<LinkMessage>;
+    name: string;
+    addresses: string[];
+}
+
 export interface ActorSystem<D> extends BindContext<D>, LocalSystem {
-    edge: LocalEdge;
+    netNode: NetworkNode;
 
     log: Observable<SystemLogEvents>;
 

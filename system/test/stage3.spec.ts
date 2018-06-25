@@ -2,7 +2,7 @@ import {createSystem} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation';
 import {NextObserver, Observable, Subject} from "rxjs";
-import {isMessageType, LinkMessage, LocalEdge} from "../src/actors/system-link";
+import {isMessageType, LinkMessage, NetworkNode} from "../src/actors/network";
 import {filter, take} from 'rxjs/operators';
 
 function randomDelay() {
@@ -14,8 +14,8 @@ class Channel {
     stream2 = new Subject<LinkMessage>();
 }
 
-function connect(toRemote: NextObserver<LinkMessage>, fromRemote: Observable<LinkMessage>, localEdge: LocalEdge): Promise<any> {
-    const output = localEdge.connectAnonymousSystem(fromRemote);
+function connect(toRemote: NextObserver<LinkMessage>, fromRemote: Observable<LinkMessage>, node: NetworkNode): Promise<any> {
+    const output = node.connect(fromRemote);
     output.subscribe(toRemote);
     return output.pipe(filter(m => isMessageType('HandshakeConfirm', m)), take(1)).toPromise();
 }
@@ -37,8 +37,8 @@ describe('system', () => {
 
             // connect both systems
             await Promise.race([
-                connect(channel.stream1, channel.stream2, consumerSystem.edge),
-                connect(channel.stream2, channel.stream1, serviceSystem.edge)
+                connect(channel.stream1, channel.stream2, consumerSystem.netNode),
+                connect(channel.stream2, channel.stream1, serviceSystem.netNode)
             ]);
 
             // bootstrap service in serviceSystem
@@ -76,16 +76,16 @@ describe('system', () => {
             await Promise.all([
                 Promise.race([
                     // connect service to proxy1 via channelA
-                    connect(channelA.stream1, channelA.stream2, proxySystem1.edge),
-                    connect(channelA.stream2, channelA.stream1, serviceSystem.edge)
+                    connect(channelA.stream1, channelA.stream2, proxySystem1.netNode),
+                    connect(channelA.stream2, channelA.stream1, serviceSystem.netNode)
                 ]), Promise.race([
                     // connect proxy1 to proxy2 via channelB
-                    connect(channelB.stream1, channelB.stream2, proxySystem1.edge),
-                    connect(channelB.stream2, channelB.stream1, proxySystem2.edge),
+                    connect(channelB.stream1, channelB.stream2, proxySystem1.netNode),
+                    connect(channelB.stream2, channelB.stream1, proxySystem2.netNode),
                 ]), Promise.race([
                     // connect consumer to proxy2 via channelC
-                    connect(channelC.stream1, channelC.stream2, proxySystem2.edge),
-                    connect(channelC.stream2, channelC.stream1, consumerSystem.edge),
+                    connect(channelC.stream1, channelC.stream2, proxySystem2.netNode),
+                    connect(channelC.stream2, channelC.stream1, consumerSystem.netNode),
                 ])
             ]);
 

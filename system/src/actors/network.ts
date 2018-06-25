@@ -1,6 +1,6 @@
-import {Address, Message} from "./types";
+import {Address, Message, NetworkNode} from "./types";
 import {NextObserver, Observable, Subject} from 'rxjs';
-import {filter} from 'rxjs/operators';
+import {filter, take} from 'rxjs/operators';
 
 export interface Handshake {
     type: 'Handshake';
@@ -50,19 +50,13 @@ export interface LocalSystem {
     sendLocalMessage(message: Message<any>): void;
 }
 
-export interface LocalEdge {
-    connectAnonymousSystem(input: Observable<LinkMessage>): Observable<LinkMessage>;
-    name: string;
-    addresses: string[];
-}
-
 interface AddressBookEntry {
     edgeName: string;
     edge: NextObserver<SystemMessage>;
     address: Address;
 }
 
-export class SystemLinksManager implements LocalEdge {
+export class NetworkManager implements NetworkNode {
     private addressBook: AddressBookEntry[] = [];
     private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
     public localInput = new Subject<SystemMessage>();
@@ -87,89 +81,87 @@ export class SystemLinksManager implements LocalEdge {
         return Array.from(new Set(this.addressBook.map(e => e.address)))
     }
 
-    connectAnonymousSystem(input: Observable<LinkMessage>): Observable<LinkMessage> {
-        const result = new Subject<LinkMessage>();
+    connect(fromRemote: Observable<LinkMessage>): Observable<LinkMessage> {
+        const toRemote = new Subject<LinkMessage>();
+        // if nothing else happens, initiate handshake within 5-50 ms
         const handshakeTimeout = setTimeout(() => {
-            result.next({
+            toRemote.next({
                 type: 'Handshake',
                 name: this.name,
                 addresses: this.addresses
             });
         }, 5 + Math.random() * 45);
-        // TODO: promise from rxjs
-        new Promise<Handshake | HandshakeConfirm>((resolve) => {
-            const subscription = input.subscribe((msg: LinkMessage) => {
-                if (isMessageType('Handshake', msg)) {
-                    result.next({
-                        type: 'HandshakeConfirm',
-                        name: this.name,
-                        addresses: this.addresses
-                    });
-                    clearTimeout(handshakeTimeout);
-                    subscription.unsubscribe();
-                    resolve(msg);
-                } else if (isMessageType('HandshakeConfirm', msg)) {
-                    subscription.unsubscribe();
-                    resolve(msg);
-                }
-            });
-        }).then(msg => {
-            const systemMessagesFromRemote = input.pipe(filter((m: LinkMessage): m is SystemMessage => {
+
+        // wait for other side's handshake initiative and respond
+        const handShakeConfirmation = fromRemote.subscribe(msg => {
+            if (isMessageType('Handshake', msg)) {
+                clearTimeout(handshakeTimeout); // no need to initiate handshake
+                toRemote.next({
+                    type: 'HandshakeConfirm',
+                    name: this.name,
+                    addresses: this.addresses
+                });
+            }
+        });
+        // wait for either handshake initiative or confirmation (race)
+        fromRemote.pipe(
+            filter((msg): msg is Handshake | HandshakeConfirm => isMessageType('Handshake', msg) || isMessageType('HandshakeConfirm', msg)),
+            take(1)
+        ).subscribe(msg => {
+            handShakeConfirmation.unsubscribe(); // no need to confirm handshake
+            // create sub-stream of only SystemMessage
+            const systemMessagesFromRemote = fromRemote.pipe(filter((m: LinkMessage): m is SystemMessage => {
                 return isMessageType('SendMessage', m) || isMessageType('AddAddress', m) || isMessageType('RemoveAddress', m);
             }));
-            return this.connectNamedSystem(msg.name, msg.addresses, systemMessagesFromRemote).subscribe(result);
+            // connect to the remote system
+            return this.connectNamedSystem(msg.name, msg.addresses, systemMessagesFromRemote).subscribe(toRemote);
         });
-        return result;
+        return toRemote;
     }
 
     connectNamedSystem(name: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
-        const result = new Subject<SystemMessage>();
-        this.channels[name] = result;
-        addresses.forEach(a => this.onAddAddress(name, a));
+        const toRemote = new Subject<SystemMessage>();
+        this.channels[name] = toRemote;
+        addresses.forEach(a => this.addAddress(name, a));
         fromRemote.subscribe((m: LinkMessage) => {
             if (isMessageType('AddAddress', m)) {
-                this.onAddAddress(name, m.address);
+                this.addAddress(name, m.address);
             } else if (isMessageType('RemoveAddress', m)) {
-                this.onRemoveAddress(name, m.address);
+                this.removeAddress(name, m.address);
             } else if (isMessageType('SendMessage', m)) {
                 this.sendMessage(m.message);
             }
         });
-        return result;
+        return toRemote;
     }
 
-    onAddAddress(reportingSystemName: string, address: Address) {
-        this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
+    private broadcast(reportingSystemName: string, message : AddAddress | RemoveAddress){
         Object.keys(this.channels).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
-                this.channels[reportTo].next({type: 'AddAddress', address});
+                this.channels[reportTo].next(message);
             }
         });
+    }
+    addAddress(reportingSystemName: string, address: Address) {
+        this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
+        this.broadcast(reportingSystemName, {type: 'AddAddress', address});
+
     };
 
-    onRemoveAddress(reportingSystemName: string, address: Address) {
+    removeAddress(reportingSystemName: string, address: Address) {
         this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
-        Object.keys(this.channels).forEach(reportTo => {
-            if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
-                this.channels[reportTo].next({type: 'RemoveAddress', address});
-            }
-        });
+        this.broadcast(reportingSystemName, {type: 'RemoveAddress', address});
     };
 
     sendMessage(message: Message<any>): boolean {
         // look for another system to send the message to
-        const otherSystem = this.getEdgeByAddress(message.to);
-        if (otherSystem) {
-            otherSystem.next({type: 'SendMessage', message});
+        // todo: sort by distance
+        const entry = this.addressBook.find(e => e.address === message.to);
+        if (entry) {
+            entry.edge.next({type: 'SendMessage', message});
             return true;
         } else {
             return false;
         }
     };
-
-    getEdgeByAddress(address: Address) {
-        // todo: sort by distance
-        const entry = this.addressBook.find(e => e.address === address);
-        return entry && entry.edge;
-    }
 }
