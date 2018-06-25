@@ -1,8 +1,8 @@
-import {createSystem, ClusterNode} from "../src";
+import {ClusterNode, createSystem} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation';
 import {NextObserver, Observable, Subject} from "rxjs";
-import {isMessageType, ClusterMessage} from "../src/cluster";
+import {ClusterMessage, isMessageType} from "../src/cluster";
 import {filter, take} from 'rxjs/operators';
 
 function randomDelay() {
@@ -57,11 +57,10 @@ describe('system', () => {
 
         }));
         it(`load plugins in different systems that are connected by proxies and have them all communicate with each other`, plan(1, async () => {
-            // simulate a chain of systems with length=4
-            // TODO: more complex graphs may create feedback infinite loops (unless each message carries with it its "notified edges" history.
+            // simulate a "diamond of death" topology that may create feedback infinite loops if it wasn't for routes history
             const serviceSystem = createSystem<SystemContext>('service'); // the system with the computation service
-            const proxySystem1 = createSystem('proxy1'); // a system that is connected to the other systems
-            const proxySystem2 = createSystem('proxy2'); // a system that is connected to the other systems
+            const proxySystem1 = createSystem('proxy1'); // a system that is connected to consumerSystem, proxySystem2 and serviceSystem
+            const proxySystem2 = createSystem('proxy2'); // a system that is connected to consumerSystem and proxySystem1
             const consumerSystem = createSystem('consumer'); // a system that needs to use the computation service
 
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
@@ -71,6 +70,7 @@ describe('system', () => {
             const channelA = new Channel();
             const channelB = new Channel();
             const channelC = new Channel();
+            const channelD = new Channel();
 
             // connect all systems
             await Promise.all([
@@ -83,9 +83,13 @@ describe('system', () => {
                     connect(channelB.stream1, channelB.stream2, proxySystem1.cluster),
                     connect(channelB.stream2, channelB.stream1, proxySystem2.cluster),
                 ]), Promise.race([
-                    // connect consumer to proxy2 via channelC
-                    connect(channelC.stream1, channelC.stream2, proxySystem2.cluster),
+                    // connect proxy1 to proxy2 via channelB
+                    connect(channelC.stream1, channelC.stream2, proxySystem1.cluster),
                     connect(channelC.stream2, channelC.stream1, consumerSystem.cluster),
+                ]), Promise.race([
+                    // connect consumer to proxy2 via channelC
+                    connect(channelD.stream1, channelD.stream2, proxySystem2.cluster),
+                    connect(channelD.stream2, channelD.stream1, consumerSystem.cluster),
                 ])
             ]);
 

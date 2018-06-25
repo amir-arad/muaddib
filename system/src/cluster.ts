@@ -16,16 +16,19 @@ export interface HandshakeConfirm {
 
 export interface AddAddress {
     type: 'AddAddress';
+    route: string[];
     address: Address;
 }
 
 export interface RemoveAddress {
     type: 'RemoveAddress';
+    route: string[];
     address: Address;
 }
 
 export interface SendMessage {
     type: 'SendMessage';
+    route: string[];
     message: Message<any>;
 }
 
@@ -52,7 +55,6 @@ export interface LocalSystem {
 
 interface AddressBookEntry {
     edgeName: string;
-    edge: NextObserver<SystemMessage>;
     address: Address;
 }
 
@@ -64,6 +66,8 @@ export interface Postal {
     sendMessage(message: Message<any>): boolean;
 }
 
+// TODO: replace handshake with auto discovery (broadcasting by default, and sniffing messages to narrow it down)
+// blocked by: adding "from" field to messages, at-least-once delivery, giving up on "UndeliveredMessage" event or adding ack and nack to protocol
 export class SystemClusterNode implements ClusterNode, Postal {
     private addressBook: AddressBookEntry[] = [];
     private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
@@ -130,44 +134,44 @@ export class SystemClusterNode implements ClusterNode, Postal {
     connectNamedSystem(name: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
         const toRemote = new Subject<SystemMessage>();
         this.channels[name] = toRemote;
-        addresses.forEach(a => this.addAddress(name, a));
+        addresses.forEach(a => this.addAddress(name, a, [name])); // todo: add system name to addresses list
         fromRemote.subscribe((m: ClusterMessage) => {
             if (isMessageType('AddAddress', m)) {
-                this.addAddress(name, m.address);
+                this.addAddress(name, m.address, m.route);
             } else if (isMessageType('RemoveAddress', m)) {
-                this.removeAddress(name, m.address);
+                this.removeAddress(name, m.address, m.route);
             } else if (isMessageType('SendMessage', m)) {
-                this.sendMessage(m.message);
+                this.sendMessage(m.message, m.route);
             }
         });
         return toRemote;
     }
 
-    private broadcast(reportingSystemName: string, message: AddAddress | RemoveAddress) {
+    private broadcast(message: SystemMessage) {
         Object.keys(this.channels).forEach(reportTo => {
-            if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
+            if (!message.route.includes(reportTo)) {
                 this.channels[reportTo].next(message);
             }
         });
     }
 
-    addAddress(reportingSystemName: string, address: Address) {
-        this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
-        this.broadcast(reportingSystemName, {type: 'AddAddress', address});
+    addAddress(reportingSystemName: string, address: Address, route: string[] = []) {
+        this.addressBook.push({edgeName: reportingSystemName, address});
+        this.broadcast({type: 'AddAddress', address, route: route.concat(this.system.name)});
 
     };
 
-    removeAddress(reportingSystemName: string, address: Address) {
+    removeAddress(reportingSystemName: string, address: Address, route: string[] = []) {
         this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
-        this.broadcast(reportingSystemName, {type: 'RemoveAddress', address});
+        this.broadcast( {type: 'RemoveAddress', address, route: route.concat(this.system.name)});
     };
 
-    sendMessage(message: Message<any>): boolean {
+    sendMessage(message: Message<any>, route: string[] = []): boolean {
         // look for another system to send the message to
-        // todo: sort by distance
-        const entry = this.addressBook.find(e => e.address === message.to);
-        if (entry) {
-            entry.edge.next({type: 'SendMessage', message});
+        // todo: sort by distance?
+        const entry = this.addressBook.find(e => e.address === message.to && !route.includes(e.edgeName));
+        if (entry && this.channels[entry.edgeName]) {
+            this.channels[entry.edgeName].next({type: 'SendMessage', message, route: route.concat(this.system.name)});
             return true;
         } else {
             return false;
