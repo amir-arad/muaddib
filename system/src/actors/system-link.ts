@@ -50,7 +50,7 @@ export interface LocalSystem {
 }
 
 export interface LocalEdge {
-    connectTo(remoteSystem: SystemLinkEdge): void;
+    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void;
 
     getName(): Promise<string>;
 
@@ -76,7 +76,7 @@ export interface SystemLinkEdge {
 }
 
 export interface SystemLinkLocalEdge extends SystemLinkEdge {
-    connectTo(other: SystemLinkEdge): void;
+    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void;
 }
 
 // TODO check with https://github.com/harunurhan/rx-socket.io-client ?
@@ -114,27 +114,8 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
             localEdge.sendMessage(m.message);
         }
     });
-    // todo: refactor out once simple-link is out
-    const remoteSystem: SystemLinkEdge = {
-        // TODO remove
-        getName(): Promise<string> {
-            return Promise.resolve(msg.name);
-        },
-        // TODO remove
-        getAllAddresses(): Promise<Array<Address>> {
-            return Promise.resolve(msg.addresses);
-        },
-        onAddAddress(otherSystemName: string, address: Address): void {
-            channel.input.next({type: 'AddAddress', address})
-        },
-        onRemoveAddress(otherSystemName: string, address: Address): void {
-            channel.input.next({type: 'RemoveAddress', address})
-        },
-        sendMessage(message: Message<any>): void {
-            channel.input.next({type: 'SendMessage', message})
-        }
-    };
-    return localEdge.connectTo(remoteSystem);
+
+    return localEdge.connectTo(msg.name, msg.addresses, channel.input);
 }
 
 export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
@@ -144,10 +125,18 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
 
     constructor(private system: LocalSystem) {
         this.addressBook = new AddressBook(system.name);
-        this.addressBook.addRemoteSystem(system.name, this);
+        this.addressBook.addRemoteSystem(system.name, this.input);
+        this.input.subscribe(async (m: LinkMessage) => {
+            if (isMessageType('AddAddress', m)) {
+                this.onAddAddress(system.name, m.address);
+            } else if (isMessageType('RemoveAddress', m)) {
+                this.onRemoveAddress(system.name, m.address);
+            } else if (isMessageType('SendMessage', m)) {
+                this.system.sendLocalMessage(m.message);
+            }
+        })
     }
 
-// new connect API
     get name(): string {
         return this.system.name;
     }
@@ -156,12 +145,9 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         return this.addressBook.getAllAddresses();
     }
 
-// old connect api
-    async connectTo(remoteSystem: SystemLinkEdge) {
-        const name = await remoteSystem.getName();
-        this.addressBook.addRemoteSystem(name, remoteSystem);
-        const allAddresses = await remoteSystem.getAllAddresses();
-        allAddresses.forEach(a => this.onAddAddress(name, a));
+    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void {
+        this.addressBook.addRemoteSystem(name, input);
+        addresses.forEach(a => this.onAddAddress(name, a));
     }
 
     // TODO: change to property that is transfered with the object
@@ -178,11 +164,7 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         // look for another system to send the message to
         const otherSystem = this.getEdgeByAddress(message.to);
         if (otherSystem) {
-            if (otherSystem === this) {
-                this.system.sendLocalMessage(message);
-            } else {
-                otherSystem.sendMessage(message);
-            }
+            otherSystem.next({type: 'SendMessage', message});
             return true;
         } else {
             return false;
@@ -197,23 +179,22 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         this.addressBook.removeAddress(otherSystemName, address);
     };
 
-    getEdgeByAddress(address: Address): SystemLinkEdge | undefined {
+    getEdgeByAddress(address: Address): Subject<LinkMessage> | undefined {
         return this.addressBook.getEdgeByAddress(address);
     }
 }
 
 interface AddressBookEntry {
     edgeName: string;
-    edge: SystemLinkEdge;
+    edge: Subject<LinkMessage>;
     address: Address;
 }
-
 /**
  * manage all addresses known to a system
  */
 class AddressBook {
     private entries: AddressBookEntry[] = [];
-    private otherEdges: { [systemName: string]: SystemLinkEdge } = {};
+    private otherEdges: { [systemName: string]: Subject<LinkMessage> } = {};
 
     constructor(private localName: string) {
     }
@@ -226,7 +207,7 @@ class AddressBook {
         this.entries.push({edgeName: reportingSystemName, edge: this.otherEdges[reportingSystemName], address});
         Object.keys(this.otherEdges).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.localName) {
-                this.otherEdges[reportTo].onAddAddress(this.localName, address);
+                this.otherEdges[reportTo].next({type: 'AddAddress', address});
             }
         });
     }
@@ -235,12 +216,12 @@ class AddressBook {
         this.entries = this.entries.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
         Object.keys(this.otherEdges).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.localName) {
-                this.otherEdges[reportTo].onRemoveAddress(this.localName, address);
+                this.otherEdges[reportTo].next({type: 'RemoveAddress', address});
             }
         });
     }
 
-    addRemoteSystem(systemName: string, remoteSystem: SystemLinkEdge) {
+    addRemoteSystem(systemName: string, remoteSystem: Subject<LinkMessage>) {
         this.otherEdges[systemName] = remoteSystem;
     }
 
