@@ -1,6 +1,6 @@
 import {Address, Message} from "./types";
 import {Observable, Subject} from 'rxjs';
-
+import {filter} from 'rxjs/operators';
 
 export interface Handshake {
     type: 'Handshake';
@@ -50,7 +50,7 @@ export interface LocalSystem {
 }
 
 export interface LocalEdge {
-    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void;
+    connectTo(name: string, addresses: string[], toRemote: Subject<LinkMessage>, fromRemote: Observable<LinkMessage>): void;
 
     name: string;
     addresses: string[];
@@ -69,8 +69,7 @@ export interface SystemLinkEdge {
     sendMessage(message: Message<any>): void;
 }
 
-export interface SystemLinkLocalEdge extends SystemLinkEdge {
-    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void;
+export interface SystemLinkLocalEdge extends SystemLinkEdge, LocalEdge {
 }
 
 // TODO check with https://github.com/harunurhan/rx-socket.io-client ?
@@ -99,17 +98,7 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
         addresses: localEdge.addresses
     });
     const msg = await resolution;
-    channel.output.subscribe(async (m: LinkMessage) => {
-        if (isMessageType('AddAddress', m)) {
-            localEdge.onAddAddress(msg.name, m.address);
-        } else if (isMessageType('RemoveAddress', m)) {
-            localEdge.onRemoveAddress(msg.name, m.address);
-        } else if (isMessageType('SendMessage', m)) {
-            localEdge.sendMessage(m.message);
-        }
-    });
-
-    return localEdge.connectTo(msg.name, msg.addresses, channel.input);
+    localEdge.connectTo(msg.name, msg.addresses, channel.input, channel.output);
 }
 
 
@@ -125,14 +114,35 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
     public localInput = new Subject<LinkMessage>();
 
     constructor(private system: LocalSystem) {
-        this.addRemoteSystem(system.name, this.localInput);
-        this.localInput.subscribe(async (m: LinkMessage) => {
-            if (isMessageType('AddAddress', m)) {
-                this.onAddAddress(system.name, m.address);
-            } else if (isMessageType('RemoveAddress', m)) {
-                this.onRemoveAddress(system.name, m.address);
-            } else if (isMessageType('SendMessage', m)) {
+        const localOutput = this.localInput.pipe(filter((m: LinkMessage) => {
+            // local messages should go to local system
+            if (isMessageType('SendMessage', m)) {
                 this.system.sendLocalMessage(m.message);
+                return false;
+            }
+            return true;
+        }));
+        this.connectTo(system.name, [], this.localInput, localOutput);
+    }
+
+    get name(): string {
+        return this.system.name;
+    }
+
+    get addresses(): string[] {
+        return Array.from(new Set(this.addressBook.map(e => e.address)))
+    }
+
+    connectTo(name: string, addresses: string[], toRemote: Subject<LinkMessage>, fromRemote: Observable<LinkMessage>): void {
+        this.channels[name] = toRemote;
+        addresses.forEach(a => this.onAddAddress(name, a));
+        fromRemote.subscribe((m: LinkMessage) => {
+            if (isMessageType('AddAddress', m)) {
+                this.onAddAddress(name, m.address);
+            } else if (isMessageType('RemoveAddress', m)) {
+                this.onRemoveAddress(name, m.address);
+            } else if (isMessageType('SendMessage', m)) {
+                this.sendMessage(m.message);
             }
         });
     }
@@ -166,26 +176,9 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         }
     };
 
-    addRemoteSystem(systemName: string, remoteSystem: Subject<LinkMessage>) {
-        this.channels[systemName] = remoteSystem;
-    }
-
     getEdgeByAddress(address: Address) {
         // todo: sort by distance
         const entry = this.addressBook.find(e => e.address === address);
         return entry && entry.edge;
-    }
-
-    get name(): string {
-        return this.system.name;
-    }
-
-    get addresses(): string[] {
-        return Array.from(new Set(this.addressBook.map(e => e.address)))
-    }
-
-    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void {
-        this.addRemoteSystem(name, input);
-        addresses.forEach(a => this.onAddAddress(name, a));
     }
 }
