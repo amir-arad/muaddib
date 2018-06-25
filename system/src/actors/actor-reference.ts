@@ -1,11 +1,11 @@
 import {ActorRef, Address, ChildActorRef, MessageAndContext} from "./types";
-import {ActorSystemImpl} from "./actor-system";
+import {SystemImpl} from "./system";
 import {ActorContextImpl} from "./actor-context";
 
 export class ActorRefImpl<T> implements ChildActorRef<T> {
     private __jobCounter = 0;
 
-    constructor(private system: ActorSystemImpl<any>, public address: Address, private ctx: ActorContextImpl<any, any>) {
+    constructor(private system: SystemImpl<any>, public address: Address, private ctx: ActorContextImpl<any, any>) {
     }
 
     send(body: T, replyTo?: ActorRef<any>): void {

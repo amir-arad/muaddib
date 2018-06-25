@@ -4,11 +4,12 @@ import {
     ActorRef,
     Address,
     ChildActorRef,
+    ExecutionContext,
     Message,
     MessageAndContext,
     Serializable
 } from "./types";
-import {ActorSystemImpl} from "./actor-system";
+import {SystemImpl} from "./system";
 import {Container} from "../dependencies/dependencies";
 import {ActorRefImpl} from "./actor-reference";
 import {Quantity} from "../dependencies/types";
@@ -20,7 +21,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
 
-    constructor(private readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
+    constructor(private readonly system: SystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
         this.self = this.makeBoundReference(this.address);
     }
 
@@ -31,16 +32,28 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     async get<P extends keyof D>(key: P, quantity: Quantity = Quantity.any): Promise<null | D[P] | Array<D[P]>> {
         try {
             const result = await this.getImpl(key, quantity as any);
-            const resultSize = result === null ? 0 : Array.isArray(result)? result.length : 1;
-            this.system.log.next({type: 'ProvisioningSupplied', consumer: this.address, key : key.toString(), resultSize : resultSize, quantity : Quantity[quantity]});
+            const resultSize = result === null ? 0 : Array.isArray(result) ? result.length : 1;
+            this.system.log.next({
+                type: 'ProvisioningSupplied',
+                consumer: this.address,
+                key: key.toString(),
+                resultSize: resultSize,
+                quantity: Quantity[quantity]
+            });
             return result;
         } catch (errorObj) {
-            this.system.log.next({type: 'ProvisioningSupplyError', consumer: this.address, key : key.toString(), quantity : Quantity[quantity], error: errorObj.message});
+            this.system.log.next({
+                type: 'ProvisioningSupplyError',
+                consumer: this.address,
+                key: key.toString(),
+                quantity: Quantity[quantity],
+                error: errorObj.message
+            });
             throw errorObj;
         }
     }
 
-    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.__jobCounter++): Promise<void> {
+    async run(script: (ctx: ExecutionContext<D>) => any, address: Address = '' + this.__jobCounter++): Promise<void> {
         const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.getImpl);
         await script(newContext);
     }

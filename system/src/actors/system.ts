@@ -1,5 +1,5 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
+import {ActorContext, ActorDef, ActorFunction, Address, Message, System, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
@@ -19,7 +19,7 @@ const rootActorDefinition: ActorDef<any, any, any> = {
 };
 
 // TODO : supervision
-export class ActorSystemImpl<D> implements ActorSystem<D> {
+export class SystemImpl<D> implements System<D> {
     public localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];

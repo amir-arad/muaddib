@@ -1,6 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, Index, ResolveContext} from "../dependencies/types";
-import {LocalSystem, LinkMessage} from "./network";
+import {LinkMessage, LocalSystem} from "./network";
 
 export interface ActorRef<T> {
     address: Address;
@@ -25,34 +25,35 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
 
 export interface NetworkNode {
     connect(input: Observable<LinkMessage>): Observable<LinkMessage>;
+
     name: string;
     addresses: string[];
 }
 
-export interface ActorSystem<D> extends BindContext<D>, LocalSystem {
+export interface System<D> extends BindContext<D>, LocalSystem {
     netNode: NetworkNode;
 
     log: Observable<SystemLogEvents>;
 
-    run: ActorContext<never, D>['run'];
+    run: ExecutionContext<D>['run'];
 }
 
-export interface ActorContext<T, D> extends MessageContext, ResolveContext<D> {
-
+export interface ExecutionContext<D> extends ResolveContext<D> {
     log(...args: any[]): void;
 
-    run(script: (ctx: ActorContext<never, D>) => any, address?: Address): Promise<void>;
-
-    self: ActorRef<T>;
-
-    stop(): void;
+    run(script: (ctx: ExecutionContext<D>) => any, address?: Address): Promise<void>;
 
     actorOf<M>(ctor: ActorDef<void, M, D>): ChildActorRef<M>;
 
     actorOf<P, M1>(ctor: ActorDef<P, M1, D>, props: P): ChildActorRef<M1>;
 
     actorFor(addr: Address): ActorRef<any>;
+}
 
+export interface ActorContext<T, D> extends MessageContext, ExecutionContext<D> {
+    self: ActorRef<T>;
+
+    stop(): void;
 }
 
 export function isPromiseLike(subj: any): subj is PromiseLike<any> {

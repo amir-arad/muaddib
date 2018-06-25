@@ -135,13 +135,14 @@ export class NetworkManager implements NetworkNode {
         return toRemote;
     }
 
-    private broadcast(reportingSystemName: string, message : AddAddress | RemoveAddress){
+    private broadcast(reportingSystemName: string, message: AddAddress | RemoveAddress) {
         Object.keys(this.channels).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
                 this.channels[reportTo].next(message);
             }
         });
     }
+
     addAddress(reportingSystemName: string, address: Address) {
         this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
         this.broadcast(reportingSystemName, {type: 'AddAddress', address});
