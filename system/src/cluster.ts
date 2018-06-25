@@ -1,4 +1,4 @@
-import {Address, Message, NetworkNode} from "./types";
+import {Address, Message, ClusterNode} from "./types";
 import {NextObserver, Observable, Subject} from 'rxjs';
 import {filter, take} from 'rxjs/operators';
 
@@ -37,10 +37,10 @@ export type MessageTypeMap = {
     HandshakeConfirm: HandshakeConfirm
 }
 
-export type LinkMessage = SystemMessage | Handshake | HandshakeConfirm;
+export type ClusterMessage = SystemMessage | Handshake | HandshakeConfirm;
 export type SystemMessage = SendMessage | AddAddress | RemoveAddress;
 
-export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: LinkMessage): m is MessageTypeMap[T] {
+export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: ClusterMessage): m is MessageTypeMap[T] {
     return m.type === t;
 }
 
@@ -56,7 +56,7 @@ interface AddressBookEntry {
     address: Address;
 }
 
-export class NetworkManager implements NetworkNode {
+export class SystemClusterNode implements ClusterNode {
     private addressBook: AddressBookEntry[] = [];
     private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
     public localInput = new Subject<SystemMessage>();
@@ -81,8 +81,8 @@ export class NetworkManager implements NetworkNode {
         return Array.from(new Set(this.addressBook.map(e => e.address)))
     }
 
-    connect(fromRemote: Observable<LinkMessage>): Observable<LinkMessage> {
-        const toRemote = new Subject<LinkMessage>();
+    connect(fromRemote: Observable<ClusterMessage>): Observable<ClusterMessage> {
+        const toRemote = new Subject<ClusterMessage>();
         // if nothing else happens, initiate handshake within 5-50 ms
         const handshakeTimeout = setTimeout(() => {
             toRemote.next({
@@ -110,7 +110,7 @@ export class NetworkManager implements NetworkNode {
         ).subscribe(msg => {
             handShakeConfirmation.unsubscribe(); // no need to confirm handshake
             // create sub-stream of only SystemMessage
-            const systemMessagesFromRemote = fromRemote.pipe(filter((m: LinkMessage): m is SystemMessage => {
+            const systemMessagesFromRemote = fromRemote.pipe(filter((m: ClusterMessage): m is SystemMessage => {
                 return isMessageType('SendMessage', m) || isMessageType('AddAddress', m) || isMessageType('RemoveAddress', m);
             }));
             // connect to the remote system
@@ -123,7 +123,7 @@ export class NetworkManager implements NetworkNode {
         const toRemote = new Subject<SystemMessage>();
         this.channels[name] = toRemote;
         addresses.forEach(a => this.addAddress(name, a));
-        fromRemote.subscribe((m: LinkMessage) => {
+        fromRemote.subscribe((m: ClusterMessage) => {
             if (isMessageType('AddAddress', m)) {
                 this.addAddress(name, m.address);
             } else if (isMessageType('RemoveAddress', m)) {

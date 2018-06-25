@@ -3,7 +3,7 @@ import {ActorContext, ActorDef, ActorFunction, Address, Message, System, SystemL
 import {ActorManager} from "./actor/manager";
 import {ActorContextImpl} from "./actor/context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
-import {NetworkManager} from "./network";
+import {SystemClusterNode} from "./cluster";
 
 /**
  * create a no-operation function actor for given actor context
@@ -24,7 +24,7 @@ export class SystemImpl<D> implements System<D> {
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
-    public readonly netNode = new NetworkManager(this);
+    public readonly cluster = new SystemClusterNode(this);
 
     constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);
@@ -40,7 +40,7 @@ export class SystemImpl<D> implements System<D> {
         const newAddress = this.makeNewAddress(ctor, props);
         const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.container.get);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
-        this.netNode.addAddress(this.name, newAddress);
+        this.cluster.addAddress(this.name, newAddress);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
     }
@@ -50,7 +50,7 @@ export class SystemImpl<D> implements System<D> {
         if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
             actorMgr.stop();
-            this.netNode.removeAddress(this.name, address);
+            this.cluster.removeAddress(this.name, address);
             delete this.localActors[address];
         }
     }
@@ -69,7 +69,7 @@ export class SystemImpl<D> implements System<D> {
     sendMessage(message: Message<any>) {
         this.log.next({type: 'MessageSent', message});
         // look for another system to send the message to
-        if (!this.netNode.sendMessage(message)) {
+        if (!this.cluster.sendMessage(message)) {
             this.log.next({type: 'UndeliveredMessage', message});
             console.error(new Error(`unknown global address "${message.to}"`).stack);
         }

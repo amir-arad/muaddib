@@ -1,6 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, Index, ResolveContext} from "./dependencies";
-import {LinkMessage, LocalSystem} from "./network";
+import {ClusterMessage, LocalSystem} from "./cluster";
 
 export interface ActorRef<T> {
     address: Address;
@@ -23,15 +23,15 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface NetworkNode {
-    connect(input: Observable<LinkMessage>): Observable<LinkMessage>;
+export interface ClusterNode {
+    connect(input: Observable<ClusterMessage>): Observable<ClusterMessage>;
 
     name: string;
     addresses: string[];
 }
 
 export interface System<D> extends BindContext<D>, LocalSystem {
-    netNode: NetworkNode;
+    cluster: ClusterNode;
 
     log: Observable<SystemLogEvents>;
 

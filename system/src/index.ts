@@ -9,5 +9,5 @@ export function createSystem<D>(name: string = 'System:' + (counter++), containe
 }
 
 export * from './types'
-export {isMessageType, LinkMessage, SystemMessage} from './network'
+export {isMessageType, ClusterMessage, SystemMessage} from './cluster'
 export * from './dependencies'
