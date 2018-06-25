@@ -59,9 +59,9 @@ interface AddressBookEntry {
 }
 
 export interface Postal {
-    addAddress(reportingSystemName: string, address: Address): void;
+    addAddress(address: Address): void;
 
-    removeAddress(reportingSystemName: string, address: Address): void;
+    removeAddress(address: Address): void;
 
     sendMessage(message: Message<any>): boolean;
 }
@@ -134,12 +134,12 @@ export class SystemClusterNode implements ClusterNode, Postal {
     connectNamedSystem(name: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
         const toRemote = new Subject<SystemMessage>();
         this.channels[name] = toRemote;
-        addresses.forEach(a => this.addAddress(name, a, [name])); // todo: add system name to addresses list
+        addresses.forEach(a => this.addAddress(a, [name])); // todo: add system name to addresses list
         fromRemote.subscribe((m: ClusterMessage) => {
             if (isMessageType('AddAddress', m)) {
-                this.addAddress(name, m.address, m.route);
+                this.addAddress(m.address, m.route);
             } else if (isMessageType('RemoveAddress', m)) {
-                this.removeAddress(name, m.address, m.route);
+                this.removeAddress(m.address, m.route);
             } else if (isMessageType('SendMessage', m)) {
                 this.sendMessage(m.message, m.route);
             }
@@ -155,23 +155,28 @@ export class SystemClusterNode implements ClusterNode, Postal {
         });
     }
 
-    addAddress(reportingSystemName: string, address: Address, route: string[] = []) {
-        this.addressBook.push({edgeName: reportingSystemName, address});
-        this.broadcast({type: 'AddAddress', address, route: route.concat(this.system.name)});
+    addAddress(address: Address, route?: string[]) {
+        const edgeName = route? route[route.length-1] : this.system.name;
+        route = route? route.concat(this.system.name) : [this.system.name];
+        this.addressBook.push({edgeName, address});
+        this.broadcast({type: 'AddAddress', address, route});
 
     };
 
-    removeAddress(reportingSystemName: string, address: Address, route: string[] = []) {
-        this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
-        this.broadcast( {type: 'RemoveAddress', address, route: route.concat(this.system.name)});
+    removeAddress(address: Address, route?: string[]) {
+        const edgeName = route? route[route.length-1] : this.system.name;
+        route = route? route.concat(this.system.name) : [this.system.name];
+        this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== edgeName);
+        this.broadcast( {type: 'RemoveAddress', address, route});
     };
 
-    sendMessage(message: Message<any>, route: string[] = []): boolean {
+    sendMessage(message: Message<any>, route?: string[]): boolean {
         // look for another system to send the message to
         // todo: sort by distance?
-        const entry = this.addressBook.find(e => e.address === message.to && !route.includes(e.edgeName));
+        const entry = this.addressBook.find(e => e.address === message.to && (!route || !route.includes(e.edgeName)));
         if (entry && this.channels[entry.edgeName]) {
-            this.channels[entry.edgeName].next({type: 'SendMessage', message, route: route.concat(this.system.name)});
+            route = route? route.concat(this.system.name) : [this.system.name];
+            this.channels[entry.edgeName].next({type: 'SendMessage', message, route});
             return true;
         } else {
             return false;

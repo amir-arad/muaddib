@@ -40,7 +40,7 @@ export class SystemImpl<D> implements System<D> {
         const newAddress = this.makeNewAddress(ctor, props);
         const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.container.get);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
-        this.cluster.addAddress(this.name, newAddress);
+        this.cluster.addAddress(newAddress);
         this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
     }
@@ -50,7 +50,7 @@ export class SystemImpl<D> implements System<D> {
         if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
             actorMgr.stop();
-            this.cluster.removeAddress(this.name, address);
+            this.cluster.removeAddress(address);
             delete this.localActors[address];
         }
     }
