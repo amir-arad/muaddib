@@ -23,6 +23,11 @@ function resolveProvider<T>(provider: AnyProvisioning<T>): Awaitable<T> {
 export class Container<T> implements BindContext<T>, ResolveContext<T> {
     private readonly registry = new Map<keyof T, Set<AnyProvisioning<T[keyof T]>>>();
 
+    constructor() {
+        // todo: move it to "get" field declaration
+        this.get = this.get.bind(this);
+    }
+
     set<P extends keyof T>(provisioning: ProvisioningPath<P> & AnyProvisioning<T[P]>): void {
         let bindingBucket = this.registry.get(provisioning.key);
         if (!bindingBucket) {

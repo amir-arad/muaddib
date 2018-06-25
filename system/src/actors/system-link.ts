@@ -36,6 +36,7 @@ export type MessageTypeMap = {
     Handshake: Handshake;
     HandshakeConfirm: HandshakeConfirm
 }
+
 export type LinkMessage = MessageTypeMap[keyof MessageTypeMap];
 
 export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: LinkMessage): m is MessageTypeMap[T] {
@@ -80,7 +81,7 @@ export interface SystemLinkLocalEdge extends SystemLinkEdge {
 
 // TODO check with https://github.com/harunurhan/rx-socket.io-client ?
 export async function connect(channel: Medium, localEdge: SystemLinkEdge & LocalEdge): Promise<void> {
-    const resolvement = new Promise<Handshake | HandshakeConfirm>(async (resolve) => {
+    const resolution = new Promise<Handshake | HandshakeConfirm>(async (resolve) => {
         const subscription = channel.output.subscribe(async (msg: LinkMessage) => {
             // console.log(msg);
             if (isMessageType('Handshake', msg)) {
@@ -103,7 +104,7 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
         name: await localEdge.getName(),
         addresses: await localEdge.getAllAddresses()
     });
-    const msg = await resolvement;
+    const msg = await resolution;
     channel.output.subscribe(async (m: LinkMessage) => {
         if (isMessageType('AddAddress', m)) {
             localEdge.onAddAddress(msg.name, m.address);

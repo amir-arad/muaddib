@@ -25,12 +25,10 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
-    private boundGet: Container<D>['get'];
     public readonly edge: SystemLinksManager;
 
     constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
-        this.boundGet = container.get.bind(container);
-        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.boundGet);
+        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);
         this.run = this.rootContext.run.bind(this.rootContext);
         this.edge = new SystemLinksManager(this);
     }
@@ -42,7 +40,7 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
 
     createActor<P, M>(ctor: ActorDef<P, M, D>, props: P) {
         const newAddress = this.makeNewAddress(ctor, props);
-        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.boundGet);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.container.get);
         this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
         this.edge.onAddAddress(this.name, newAddress);
         this.log.next({type: 'ActorCreated', address: newAddress});
