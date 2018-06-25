@@ -39,7 +39,6 @@
     "tslib": "~1.9.2"
   },
   "dependencies": {
-    "rxjs": "^6.2.0",
-    "simple-link" : "^0.0.1"
+    "rxjs": "^6.2.0"
   }
 }

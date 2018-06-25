@@ -1,5 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, Index, ResolveContext} from "../dependencies/types";
+import {LocalSystem, SystemLinkLocalEdge} from "./system-link";
 
 export interface ActorRef<T> {
     address: Address;
@@ -22,24 +23,7 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
     body: T;
 }
 
-export interface SystemLinkEdge {
-
-    getName(): Promise<string>;
-
-    getAllAddresses(): Promise<Array<Address>>;
-
-    onAddAddress(otherSystemName: string, address: Address): void;
-
-    onRemoveAddress(otherSystemName: string, address: Address): void;
-
-    sendMessage(message: Message<any>): void;
-}
-
-export interface SystemLinkLocalEdge extends SystemLinkEdge{
-    connectTo(other: SystemLinkEdge): void;
-}
-
-export interface ActorSystem<D> extends BindContext<D> {
+export interface ActorSystem<D> extends BindContext<D>, LocalSystem {
     edge: SystemLinkLocalEdge;
 
     log: Observable<SystemLogEvents>;

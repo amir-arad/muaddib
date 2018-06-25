@@ -66,9 +66,12 @@ describe('system', () => {
             });
 
         }));
-        it(`load plugins in different systems that are connected by proxy and have them all communicate with each other`, plan(1, async () => {
+        it(`load plugins in different systems that are connected by proxies and have them all communicate with each other`, plan(1, async () => {
+            // simulate a chain of systems with length=4
+            // TODO: more complex graphs may create feedback infinite loops (unless each message carries with it its "notified edges" history.
             const serviceSystem = createSystem<SystemContext>('service'); // the system with the computation service
-            const proxySystem = createSystem('proxy'); // a system that is connected to the other systems
+            const proxySystem1 = createSystem('proxy1'); // a system that is connected to the other systems
+            const proxySystem2 = createSystem('proxy2'); // a system that is connected to the other systems
             const consumerSystem = createSystem('consumer'); // a system that needs to use the computation service
 
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
@@ -77,15 +80,19 @@ describe('system', () => {
 
             const channelA = new Channel();
             const channelB = new Channel();
+            const channelC = new Channel();
 
             // connect all systems
             await Promise.all([
-                // connect service to proxy via channelA
-                connect(channelA.edge1, proxySystem.edge),
+                // connect service to proxy1 via channelA
+                connect(channelA.edge1, proxySystem1.edge),
                 connect(channelA.edge2, serviceSystem.edge),
-                // connect consumer to proxy via channelB
-                connect(channelB.edge1, proxySystem.edge),
-                connect(channelB.edge2, consumerSystem.edge),
+                // connect proxy1 to proxy2 via channelB
+                connect(channelB.edge1, proxySystem1.edge),
+                connect(channelB.edge2, proxySystem2.edge),
+                // connect consumer to proxy2 via channelC
+                connect(channelC.edge1, proxySystem2.edge),
+                connect(channelC.edge2, consumerSystem.edge),
             ]);
 
             // bootstrap service in serviceSystem

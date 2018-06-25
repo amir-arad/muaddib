@@ -1,13 +1,5 @@
 import {Subject} from "rxjs";
-import {
-    ActorContext,
-    ActorDef,
-    ActorFunction,
-    ActorSystem,
-    Address,
-    Message,
-    SystemLogEvents
-} from "./types";
+import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor-manager";
 import {ActorContextImpl} from "./actor-context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
@@ -67,21 +59,23 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         }
     }
 
-    sendMessage(message: Message<any>) {
-        this.log.next({type: 'MessageSent', message});
+    sendLocalMessage(message: Message<any>) {
         // if the message is for a local actor, send it directly
         const localRecepient = this.localActors[message.to];
         if (localRecepient) {
             localRecepient.sendMessage(message);
         } else {
-            // look for another system to send the message to
-            const otherSystem = this.edge.getEdgeByAddress(message.to);
-            if (otherSystem) {
-                otherSystem.sendMessage(message);
-            } else {
-                this.log.next({type: 'UndeliveredMessage', message});
-                console.error(new Error(`unknown address "${message.to}"`).stack);
-            }
+            this.log.next({type: 'UndeliveredMessage', message});
+            console.error(new Error(`unknown local address "${message.to}"`).stack);
+        }
+    }
+
+    sendMessage(message: Message<any>) {
+        this.log.next({type: 'MessageSent', message});
+        // look for another system to send the message to
+        if (!this.edge.sendMessage(message)) {
+            this.log.next({type: 'UndeliveredMessage', message});
+            console.error(new Error(`unknown global address "${message.to}"`).stack);
         }
     }
 
