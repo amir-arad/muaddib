@@ -1,17 +1,22 @@
-import {
-    ActorContext,
-    ActorDef,
-    ActorRef,
-    Address,
-    ChildActorRef,
-    ExecutionContext,
-    Message,
-    MessageAndContext,
-    Serializable
-} from "../types";
+import {Address, ExecutionContext, Message, Serializable} from "../types";
 import {SystemImpl} from "../system";
 import {Container, Quantity} from "../dependencies";
-import {ActorRefImpl} from "./reference";
+import {ActorRef, ActorRefImpl, ChildActorRef} from "./reference";
+import {ActorDef} from "./definition";
+
+export interface ActorContext<T, D> extends MessageContext, ExecutionContext<D> {
+    self: ActorRef<T>;
+    stop(): void;
+}
+
+export interface MessageContext {
+    unhandled: () => void;
+    replyTo?: ActorRef<any>;
+}
+
+export interface MessageAndContext<T extends Serializable> extends MessageContext {
+    body: T;
+}
 
 export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;

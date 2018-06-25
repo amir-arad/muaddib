@@ -1,9 +1,11 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, Address, ClusterNode, Message, System, SystemLogEvents} from "./types";
+import {SystemLogEvents} from "./log-events";
+import {Address, ClusterNode, Message, System} from "./types";
 import {ActorManager} from "./actor/manager";
-import {ActorContextImpl} from "./actor/context";
+import {ActorContext, ActorContextImpl} from "./actor/context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
 import {Postal, SystemClusterNode} from "./cluster";
+import {ActorDef, ActorFunction} from "./actor/definition";
 
 /**
  * create a no-operation function actor for given actor context

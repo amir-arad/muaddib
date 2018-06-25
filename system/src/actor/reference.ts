@@ -1,6 +1,18 @@
-import {ActorRef, Address, ChildActorRef, MessageAndContext} from "../types";
+import {Address} from "../types";
 import {SystemImpl} from "../system";
-import {ActorContextImpl} from "./context";
+import {ActorContextImpl, MessageAndContext} from "./context";
+
+export interface ActorRef<T> {
+    address: Address;
+
+    send(body: T, replyTo?: ActorRef<any>): void;
+
+    ask(body: T, options?: { id?: string, timeout?: number }): Promise<MessageAndContext<any>>;
+}
+
+export interface ChildActorRef<T> extends ActorRef<T> {
+    stop(): void;
+}
 
 export class ActorRefImpl<T> implements ChildActorRef<T> {
     private __jobCounter = 0;

@@ -99,7 +99,7 @@ export class SystemClusterNode implements ClusterNode, Postal {
         }));
     }
 
-    // TODO: replace handshake with auto discovery (start naive, sniff messages to learn topology)
+    // TODO: replace (or wrap?) handshake with auto discovery (start naive, sniff messages to learn topology)
     // blocked by: adding "from" field to messages, at-least-once delivery, giving up on "UndeliveredMessage" event or adding ack and nack to protocol
     connect(fromRemote: Observable<ClusterMessage>): Observable<ClusterMessage> {
         const toRemote = new Subject<ClusterMessage>();
