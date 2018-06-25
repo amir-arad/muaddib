@@ -1,33 +1,23 @@
 import {createSystem} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation';
-import {Subject} from "rxjs";
-import {connect, LinkMessage} from "../src/actors/system-link";
+import {NextObserver, Observable, Subject} from "rxjs";
+import {isMessageType, LinkMessage, LocalEdge} from "../src/actors/system-link";
+import {filter, take} from 'rxjs/operators';
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
 }
 
 class Channel {
-    into1 = new Subject<LinkMessage>();
-    into2 = new Subject<LinkMessage>();
-    edge1 = {
-        input: this.into1,
-        output: this.into2
-    };
-    edge2 = {
-        input: this.into2,
-        output: this.into1
-    };
+    stream1 = new Subject<LinkMessage>();
+    stream2 = new Subject<LinkMessage>();
+}
 
-    constructor() {
-        // this.into1.subscribe(msg => {
-        //     console.log('into1', msg);
-        // });
-        // this.into2.subscribe(msg => {
-        //     console.log('into2', msg);
-        // });
-    }
+function connect(toRemote: NextObserver<LinkMessage>, fromRemote: Observable<LinkMessage>, localEdge: LocalEdge): Promise<any> {
+    const output = localEdge.connectAnonymousSystem(fromRemote);
+    output.subscribe(toRemote);
+    return output.pipe(filter(m => isMessageType('HandshakeConfirm', m)), take(1)).toPromise();
 }
 
 describe('system', () => {
@@ -46,9 +36,9 @@ describe('system', () => {
             const channel = new Channel();
 
             // connect both systems
-            await Promise.all([
-                connect(channel.edge1, consumerSystem.edge),
-                connect(channel.edge2, serviceSystem.edge)
+            await Promise.race([
+                connect(channel.stream1, channel.stream2, consumerSystem.edge),
+                connect(channel.stream2, channel.stream1, serviceSystem.edge)
             ]);
 
             // bootstrap service in serviceSystem
@@ -84,15 +74,19 @@ describe('system', () => {
 
             // connect all systems
             await Promise.all([
-                // connect service to proxy1 via channelA
-                connect(channelA.edge1, proxySystem1.edge),
-                connect(channelA.edge2, serviceSystem.edge),
-                // connect proxy1 to proxy2 via channelB
-                connect(channelB.edge1, proxySystem1.edge),
-                connect(channelB.edge2, proxySystem2.edge),
-                // connect consumer to proxy2 via channelC
-                connect(channelC.edge1, proxySystem2.edge),
-                connect(channelC.edge2, consumerSystem.edge),
+                Promise.race([
+                    // connect service to proxy1 via channelA
+                    connect(channelA.stream1, channelA.stream2, proxySystem1.edge),
+                    connect(channelA.stream2, channelA.stream1, serviceSystem.edge)
+                ]), Promise.race([
+                    // connect proxy1 to proxy2 via channelB
+                    connect(channelB.stream1, channelB.stream2, proxySystem1.edge),
+                    connect(channelB.stream2, channelB.stream1, proxySystem2.edge),
+                ]), Promise.race([
+                    // connect consumer to proxy2 via channelC
+                    connect(channelC.stream1, channelC.stream2, proxySystem2.edge),
+                    connect(channelC.stream2, channelC.stream1, consumerSystem.edge),
+                ])
             ]);
 
             // bootstrap service in serviceSystem

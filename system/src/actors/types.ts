@@ -1,6 +1,6 @@
 import {Observable} from 'rxjs';
 import {BindContext, Index, ResolveContext} from "../dependencies/types";
-import {LocalSystem, SystemLinkLocalEdge} from "./system-link";
+import {LocalEdge, LocalSystem} from "./system-link";
 
 export interface ActorRef<T> {
     address: Address;
@@ -24,7 +24,7 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
 }
 
 export interface ActorSystem<D> extends BindContext<D>, LocalSystem {
-    edge: SystemLinkLocalEdge;
+    edge: LocalEdge;
 
     log: Observable<SystemLogEvents>;
 

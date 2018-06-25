@@ -31,10 +31,10 @@
 //     readonly config2: ConnectionConfig;
 //
 //     constructor(name:string) {
-//         const into1 = new Subject<PartiaMessageEvent>();
-//         const into2 = new Subject<PartiaMessageEvent>();
-//         this.port1 = new MessagePortImpl(into1, into2);
-//         this.port2 = new MessagePortImpl(into2, into1);
+//         const stream1 = new Subject<PartiaMessageEvent>();
+//         const stream2 = new Subject<PartiaMessageEvent>();
+//         this.port1 = new MessagePortImpl(stream1, stream2);
+//         this.port2 = new MessagePortImpl(stream2, stream1);
 //         this.config1 = {
 //             otherSideId: name + '2',
 //             thisSideId: name + '1',

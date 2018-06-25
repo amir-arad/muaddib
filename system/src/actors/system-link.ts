@@ -1,5 +1,5 @@
 import {Address, Message} from "./types";
-import {Observable, Subject} from 'rxjs';
+import {NextObserver, Observable, Subject} from 'rxjs';
 import {filter} from 'rxjs/operators';
 
 export interface Handshake {
@@ -37,7 +37,8 @@ export type MessageTypeMap = {
     HandshakeConfirm: HandshakeConfirm
 }
 
-export type LinkMessage = MessageTypeMap[keyof MessageTypeMap];
+export type LinkMessage = SystemMessage | Handshake | HandshakeConfirm;
+export type SystemMessage = SendMessage | AddAddress | RemoveAddress;
 
 export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: LinkMessage): m is MessageTypeMap[T] {
     return m.type === t;
@@ -50,71 +51,24 @@ export interface LocalSystem {
 }
 
 export interface LocalEdge {
-    connectTo(name: string, addresses: string[], toRemote: Subject<LinkMessage>, fromRemote: Observable<LinkMessage>): void;
-
+    connectAnonymousSystem(input: Observable<LinkMessage>): Observable<LinkMessage>;
     name: string;
     addresses: string[];
 }
 
-export interface Medium {
-    input: Subject<LinkMessage>;
-    output: Observable<LinkMessage>;
-}
-
-export interface SystemLinkEdge {
-    onAddAddress(otherSystemName: string, address: Address): void;
-
-    onRemoveAddress(otherSystemName: string, address: Address): void;
-
-    sendMessage(message: Message<any>): void;
-}
-
-export interface SystemLinkLocalEdge extends SystemLinkEdge, LocalEdge {
-}
-
-// TODO check with https://github.com/harunurhan/rx-socket.io-client ?
-export async function connect(channel: Medium, localEdge: SystemLinkEdge & LocalEdge): Promise<void> {
-    const resolution = new Promise<Handshake | HandshakeConfirm>(async (resolve) => {
-        const subscription = channel.output.subscribe(async (msg: LinkMessage) => {
-            // console.log(msg);
-            if (isMessageType('Handshake', msg)) {
-                channel.input.next({
-                    type: 'HandshakeConfirm',
-                    name: localEdge.name,
-                    addresses: localEdge.addresses
-                });
-                subscription.unsubscribe();
-                resolve(msg);
-            } else if (isMessageType('HandshakeConfirm', msg)) {
-                subscription.unsubscribe();
-                resolve(msg);
-            }
-        });
-    });
-    await new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
-    channel.input.next({
-        type: 'Handshake',
-        name: localEdge.name,
-        addresses: localEdge.addresses
-    });
-    const msg = await resolution;
-    localEdge.connectTo(msg.name, msg.addresses, channel.input, channel.output);
-}
-
-
 interface AddressBookEntry {
     edgeName: string;
-    edge: Subject<LinkMessage>;
+    edge: NextObserver<SystemMessage>;
     address: Address;
 }
 
-export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
+export class SystemLinksManager implements LocalEdge {
     private addressBook: AddressBookEntry[] = [];
-    private channels: { [systemName: string]: Subject<LinkMessage> } = {};
-    public localInput = new Subject<LinkMessage>();
+    private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
+    public localInput = new Subject<SystemMessage>();
 
     constructor(private system: LocalSystem) {
-        const localOutput = this.localInput.pipe(filter((m: LinkMessage) => {
+        const localOutput = this.localInput.pipe(filter((m: SystemMessage) => {
             // local messages should go to local system
             if (isMessageType('SendMessage', m)) {
                 this.system.sendLocalMessage(m.message);
@@ -122,7 +76,7 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
             }
             return true;
         }));
-        this.connectTo(system.name, [], this.localInput, localOutput);
+        this.connectNamedSystem(system.name, [], localOutput).subscribe(this.localInput);
     }
 
     get name(): string {
@@ -133,8 +87,44 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         return Array.from(new Set(this.addressBook.map(e => e.address)))
     }
 
-    connectTo(name: string, addresses: string[], toRemote: Subject<LinkMessage>, fromRemote: Observable<LinkMessage>): void {
-        this.channels[name] = toRemote;
+    connectAnonymousSystem(input: Observable<LinkMessage>): Observable<LinkMessage> {
+        const result = new Subject<LinkMessage>();
+        const handshakeTimeout = setTimeout(() => {
+            result.next({
+                type: 'Handshake',
+                name: this.name,
+                addresses: this.addresses
+            });
+        }, 5 + Math.random() * 45);
+        // TODO: promise from rxjs
+        new Promise<Handshake | HandshakeConfirm>((resolve) => {
+            const subscription = input.subscribe((msg: LinkMessage) => {
+                if (isMessageType('Handshake', msg)) {
+                    result.next({
+                        type: 'HandshakeConfirm',
+                        name: this.name,
+                        addresses: this.addresses
+                    });
+                    clearTimeout(handshakeTimeout);
+                    subscription.unsubscribe();
+                    resolve(msg);
+                } else if (isMessageType('HandshakeConfirm', msg)) {
+                    subscription.unsubscribe();
+                    resolve(msg);
+                }
+            });
+        }).then(msg => {
+            const systemMessagesFromRemote = input.pipe(filter((m: LinkMessage): m is SystemMessage => {
+                return isMessageType('SendMessage', m) || isMessageType('AddAddress', m) || isMessageType('RemoveAddress', m);
+            }));
+            return this.connectNamedSystem(msg.name, msg.addresses, systemMessagesFromRemote).subscribe(result);
+        });
+        return result;
+    }
+
+    connectNamedSystem(name: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
+        const result = new Subject<SystemMessage>();
+        this.channels[name] = result;
         addresses.forEach(a => this.onAddAddress(name, a));
         fromRemote.subscribe((m: LinkMessage) => {
             if (isMessageType('AddAddress', m)) {
@@ -145,9 +135,10 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
                 this.sendMessage(m.message);
             }
         });
+        return result;
     }
 
-    onAddAddress = (reportingSystemName: string, address: Address) => {
+    onAddAddress(reportingSystemName: string, address: Address) {
         this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
         Object.keys(this.channels).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
@@ -156,7 +147,7 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         });
     };
 
-    onRemoveAddress = (reportingSystemName: string, address: Address) => {
+    onRemoveAddress(reportingSystemName: string, address: Address) {
         this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
         Object.keys(this.channels).forEach(reportTo => {
             if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
@@ -165,7 +156,7 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         });
     };
 
-    sendMessage = (message: Message<any>): boolean => {
+    sendMessage(message: Message<any>): boolean {
         // look for another system to send the message to
         const otherSystem = this.getEdgeByAddress(message.to);
         if (otherSystem) {
