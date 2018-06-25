@@ -26,7 +26,7 @@ export class SystemImpl<D> implements System<D> {
     public readonly log = new Subject<SystemLogEvents>();
     public readonly cluster: ClusterNode & Postal = new SystemClusterNode(this);
 
-    constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
+    constructor(public id: string, private container: ResolveContext<D> & BindContext<D>) {
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);
         this.run = this.rootContext.run.bind(this.rootContext);
     }

@@ -4,8 +4,8 @@ import {Container} from "./dependencies";
 
 let counter = 0;
 
-export function createSystem<D>(name: string = 'System:' + (counter++), container: Container<D> = new Container()): System<D> {
-    return new SystemImpl<D>(name, container);
+export function createSystem<D>(id: string = 'System:' + (counter++), container: Container<D> = new Container()): System<D> {
+    return new SystemImpl<D>(id, container);
 }
 
 export * from './types'

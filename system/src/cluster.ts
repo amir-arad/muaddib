@@ -4,13 +4,13 @@ import {filter, take} from 'rxjs/operators';
 
 export interface Handshake {
     type: 'Handshake';
-    name: string;
+    nodeId: string;
     addresses: string[];
 }
 
 export interface HandshakeConfirm {
     type: 'HandshakeConfirm';
-    name: string;
+    nodeId: string;
     addresses: string[];
 }
 
@@ -48,13 +48,13 @@ export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: ClusterMe
 }
 
 export interface LocalSystem {
-    name: string;
+    id: string;
 
     sendLocalMessage(message: Message<any>): void;
 }
 
 interface AddressBookEntry {
-    edgeName: string;
+    nodeId: string;
     address: Address;
 }
 
@@ -66,11 +66,9 @@ export interface Postal {
     sendMessage(message: Message<any>): boolean;
 }
 
-// TODO: replace handshake with auto discovery (broadcasting by default, and sniffing messages to narrow it down)
-// blocked by: adding "from" field to messages, at-least-once delivery, giving up on "UndeliveredMessage" event or adding ack and nack to protocol
 export class SystemClusterNode implements ClusterNode, Postal {
-    private addressBook: AddressBookEntry[] = [];
-    private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
+    private addressBook: AddressBookEntry[] = [];  // todo: record route length and pre-sort each address by it
+    private nodes: { [nodeId: string]: NextObserver<SystemMessage> } = {};
     public localInput = new Subject<SystemMessage>();
 
     constructor(private system: LocalSystem) {
@@ -82,24 +80,27 @@ export class SystemClusterNode implements ClusterNode, Postal {
             }
             return true;
         }));
-        this.connectNamedSystem(system.name, [], localOutput).subscribe(this.localInput);
+        this.connectIdentified(system.id, [], localOutput).subscribe(this.localInput);
     }
 
-    get name(): string {
-        return this.system.name;
+    get nodeId(): string {
+        return this.system.id;
     }
 
     get addresses(): string[] {
+        // todo: expose shortest route length
         return Array.from(new Set(this.addressBook.map(e => e.address)))
     }
 
+    // TODO: replace handshake with auto discovery (start naive, sniff messages to learn topology)
+    // blocked by: adding "from" field to messages, at-least-once delivery, giving up on "UndeliveredMessage" event or adding ack and nack to protocol
     connect(fromRemote: Observable<ClusterMessage>): Observable<ClusterMessage> {
         const toRemote = new Subject<ClusterMessage>();
         // if nothing else happens, initiate handshake within 5-50 ms
         const handshakeTimeout = setTimeout(() => {
             toRemote.next({
                 type: 'Handshake',
-                name: this.name,
+                nodeId: this.nodeId,
                 addresses: this.addresses
             });
         }, 5 + Math.random() * 45);
@@ -110,7 +111,7 @@ export class SystemClusterNode implements ClusterNode, Postal {
                 clearTimeout(handshakeTimeout); // no need to initiate handshake
                 toRemote.next({
                     type: 'HandshakeConfirm',
-                    name: this.name,
+                    nodeId: this.nodeId,
                     addresses: this.addresses
                 });
             }
@@ -126,15 +127,15 @@ export class SystemClusterNode implements ClusterNode, Postal {
                 return isMessageType('SendMessage', m) || isMessageType('AddAddress', m) || isMessageType('RemoveAddress', m);
             }));
             // connect to the remote system
-            return this.connectNamedSystem(msg.name, msg.addresses, systemMessagesFromRemote).subscribe(toRemote);
+            return this.connectIdentified(msg.nodeId, msg.addresses, systemMessagesFromRemote).subscribe(toRemote);
         });
         return toRemote;
     }
 
-    connectNamedSystem(name: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
+    connectIdentified(nodeId: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
         const toRemote = new Subject<SystemMessage>();
-        this.channels[name] = toRemote;
-        addresses.forEach(a => this.addAddress(a, [name])); // todo: add system name to addresses list
+        this.nodes[nodeId] = toRemote;
+        addresses.forEach(a => this.addAddress(a, [nodeId])); // todo: add system nodeId to addresses list
         fromRemote.subscribe((m: ClusterMessage) => {
             if (isMessageType('AddAddress', m)) {
                 this.addAddress(m.address, m.route);
@@ -148,35 +149,34 @@ export class SystemClusterNode implements ClusterNode, Postal {
     }
 
     private broadcast(message: SystemMessage) {
-        Object.keys(this.channels).forEach(reportTo => {
+        Object.keys(this.nodes).forEach(reportTo => {
             if (!message.route.includes(reportTo)) {
-                this.channels[reportTo].next(message);
+                this.nodes[reportTo].next(message);
             }
         });
     }
 
     addAddress(address: Address, route?: string[]) {
-        const edgeName = route? route[route.length-1] : this.system.name;
-        route = route? route.concat(this.system.name) : [this.system.name];
-        this.addressBook.push({edgeName, address});
+        const nodeId = route ? route[route.length - 1] : this.system.id;
+        route = route ? route.concat(this.system.id) : [this.system.id];
+        this.addressBook.push({nodeId, address});
         this.broadcast({type: 'AddAddress', address, route});
 
     };
 
     removeAddress(address: Address, route?: string[]) {
-        const edgeName = route? route[route.length-1] : this.system.name;
-        route = route? route.concat(this.system.name) : [this.system.name];
-        this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== edgeName);
-        this.broadcast( {type: 'RemoveAddress', address, route});
+        const nodeId = route ? route[route.length - 1] : this.system.id;
+        route = route ? route.concat(this.system.id) : [this.system.id];
+        this.addressBook = this.addressBook.filter(e => e.address !== address || e.nodeId !== nodeId);
+        this.broadcast({type: 'RemoveAddress', address, route});
     };
 
     sendMessage(message: Message<any>, route?: string[]): boolean {
         // look for another system to send the message to
-        // todo: sort by distance?
-        const entry = this.addressBook.find(e => e.address === message.to && (!route || !route.includes(e.edgeName)));
-        if (entry && this.channels[entry.edgeName]) {
-            route = route? route.concat(this.system.name) : [this.system.name];
-            this.channels[entry.edgeName].next({type: 'SendMessage', message, route});
+        const entry = this.addressBook.find(e => e.address === message.to && this.nodes[e.nodeId] && (!route || !route.includes(e.nodeId)));
+        if (entry) {
+            route = route ? route.concat(this.system.id) : [this.system.id];
+            this.nodes[entry.nodeId].next({type: 'SendMessage', message, route});
             return true;
         } else {
             return false;
