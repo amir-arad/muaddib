@@ -5,13 +5,13 @@ import {filter, take} from 'rxjs/operators';
 export interface Handshake {
     type: 'Handshake';
     nodeId: string;
-    addresses: string[];
+    addresses: RoutingOption[];
 }
 
 export interface HandshakeConfirm {
     type: 'HandshakeConfirm';
     nodeId: string;
-    addresses: string[];
+    addresses: RoutingOption[];
 }
 
 export interface AddAddress {
@@ -53,8 +53,12 @@ export interface LocalSystem {
     sendLocalMessage(message: Message<any>): void;
 }
 
-interface AddressBookEntry {
+interface RoutingEntry extends RoutingOption {
     nodeId: string;
+}
+
+interface RoutingOption {
+    distance: number;
     address: Address;
 }
 
@@ -67,7 +71,8 @@ export interface Postal {
 }
 
 export class SystemClusterNode implements ClusterNode, Postal {
-    private addressBook: AddressBookEntry[] = [];  // todo: record route length and pre-sort each address by it
+    private routingEntries: RoutingEntry[] = [];
+    private routingTable: { [address: string]: RoutingEntry } = {};
     private nodes: { [nodeId: string]: NextObserver<SystemMessage> } = {};
     public localInput = new Subject<SystemMessage>();
 
@@ -87,9 +92,11 @@ export class SystemClusterNode implements ClusterNode, Postal {
         return this.system.id;
     }
 
-    get addresses(): string[] {
-        // todo: expose shortest route length
-        return Array.from(new Set(this.addressBook.map(e => e.address)))
+    get addresses(): RoutingOption[] {
+        return Object.keys(this.routingTable).map(address => ({
+            address,
+            distance: this.routingTable[address].distance + 1
+        }));
     }
 
     // TODO: replace handshake with auto discovery (start naive, sniff messages to learn topology)
@@ -132,13 +139,13 @@ export class SystemClusterNode implements ClusterNode, Postal {
         return toRemote;
     }
 
-    connectIdentified(nodeId: string, addresses: string[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
+    connectIdentified(nodeId: string, entries: RoutingOption[], fromRemote: Observable<SystemMessage>): Observable<SystemMessage> {
         const toRemote = new Subject<SystemMessage>();
         this.nodes[nodeId] = toRemote;
-        addresses.forEach(a => this.addAddress(a, [nodeId])); // todo: add system nodeId to addresses list
+        entries.forEach(entry => this.addAddress(entry.address, [nodeId], entry.distance));
         fromRemote.subscribe((m: ClusterMessage) => {
             if (isMessageType('AddAddress', m)) {
-                this.addAddress(m.address, m.route);
+                this.addAddress(m.address, m.route, m.route.length);
             } else if (isMessageType('RemoveAddress', m)) {
                 this.removeAddress(m.address, m.route);
             } else if (isMessageType('SendMessage', m)) {
@@ -156,27 +163,42 @@ export class SystemClusterNode implements ClusterNode, Postal {
         });
     }
 
-    addAddress(address: Address, route?: string[]) {
+    addAddress(address: Address, route?: string[], distance = 0) {
         const nodeId = route ? route[route.length - 1] : this.system.id;
         route = route ? route.concat(this.system.id) : [this.system.id];
-        this.addressBook.push({nodeId, address});
+        const newEntry = {nodeId, address, distance};
+        this.routingEntries.push(newEntry);
+        const routingEntry = this.routingTable[address];
+        if (!routingEntry || routingEntry.distance > distance) {
+            this.routingTable[address] = newEntry;
+        }
         this.broadcast({type: 'AddAddress', address, route});
-
     };
 
     removeAddress(address: Address, route?: string[]) {
         const nodeId = route ? route[route.length - 1] : this.system.id;
         route = route ? route.concat(this.system.id) : [this.system.id];
-        this.addressBook = this.addressBook.filter(e => e.address !== address || e.nodeId !== nodeId);
+        this.routingEntries = this.routingEntries.filter(e => e.address !== address || e.nodeId !== nodeId);
+        const routingEntry = this.routingTable[address];
+        if (routingEntry && routingEntry.nodeId === nodeId) {
+            // look for the new shortest distance to the address
+            const bestRoute = this.routingEntries.filter(e => e.address === address).sort((e1, e2) => e2.distance - e1.distance).pop();
+            if (bestRoute) {
+                this.routingTable[address] = bestRoute;
+            } else {
+                delete this.routingTable[address];
+            }
+        }
         this.broadcast({type: 'RemoveAddress', address, route});
     };
 
     sendMessage(message: Message<any>, route?: string[]): boolean {
         // look for another system to send the message to
-        const entry = this.addressBook.find(e => e.address === message.to && this.nodes[e.nodeId] && (!route || !route.includes(e.nodeId)));
-        if (entry) {
+        const nodeId = this.routingTable[message.to].nodeId;
+        // todo: if nodeId is in the route, look in routingEntries for an alternative
+        if (nodeId) {
             route = route ? route.concat(this.system.id) : [this.system.id];
-            this.nodes[entry.nodeId].next({type: 'SendMessage', message, route});
+            this.nodes[nodeId].next({type: 'SendMessage', message, route});
             return true;
         } else {
             return false;
