@@ -1,15 +1,33 @@
-import {createSystem, SystemLinkEdge} from "../src";
+import {createSystem} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
-import * as computation from './computation'
-import {Channel} from "./simple-link-driver.spec";
-import {connect, ConnectionConfig} from "simple-link";
+import * as computation from './computation';
+import {Subject} from "rxjs";
+import {connect, LinkMessage} from "../src/actors/system-link";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
 }
 
-async function connectSystem(system: SystemLinkEdge, connection: ConnectionConfig) {
-    await system.connectTo(await connect<SystemLinkEdge>(connection, system));
+class Channel {
+    into1 = new Subject<LinkMessage>();
+    into2 = new Subject<LinkMessage>();
+    edge1 = {
+        input: this.into1,
+        output: this.into2
+    };
+    edge2 = {
+        input: this.into2,
+        output: this.into1
+    };
+
+    constructor() {
+        // this.into1.subscribe(msg => {
+        //     console.log('into1', msg);
+        // });
+        // this.into2.subscribe(msg => {
+        //     console.log('into2', msg);
+        // });
+    }
 }
 
 describe('system', () => {
@@ -25,12 +43,12 @@ describe('system', () => {
             // serviceSystem.log.subscribe(m => console.log(JSON.stringify(m)));
             // consumerSystem.log.subscribe(m => console.log(JSON.stringify(m)));
 
-            const channel = new Channel('medium');
+            const channel = new Channel();
 
             // connect both systems
             await Promise.all([
-                connectSystem(consumerSystem.edge, channel.config1),
-                connectSystem(serviceSystem.edge, channel.config2)
+                connect(channel.edge1, consumerSystem.edge),
+                connect(channel.edge2, serviceSystem.edge)
             ]);
 
             // bootstrap service in serviceSystem
@@ -57,17 +75,17 @@ describe('system', () => {
             // proxySystem.log.subscribe(m => console.log(JSON.stringify(m)));
             // consumerSystem.log.subscribe(m => console.log(JSON.stringify(m)));
 
-            const channelA = new Channel('channelA');
-            const channelB = new Channel('channelB');
+            const channelA = new Channel();
+            const channelB = new Channel();
 
             // connect all systems
             await Promise.all([
                 // connect service to proxy via channelA
-                connectSystem(proxySystem.edge, channelA.config1),
-                connectSystem(serviceSystem.edge, channelA.config2),
+                connect(channelA.edge1, proxySystem.edge),
+                connect(channelA.edge2, serviceSystem.edge),
                 // connect consumer to proxy via channelB
-                connectSystem(consumerSystem.edge, channelB.config1),
-                connectSystem(proxySystem.edge, channelB.config2)
+                connect(channelB.edge1, proxySystem.edge),
+                connect(channelB.edge2, consumerSystem.edge),
             ]);
 
             // bootstrap service in serviceSystem

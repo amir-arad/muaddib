@@ -23,9 +23,8 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
 }
 
 export interface SystemLinkEdge {
-    connectTo(other: SystemLinkEdge): void;
 
-    name(): Promise<string>;
+    getName(): Promise<string>;
 
     getAllAddresses(): Promise<Array<Address>>;
 
@@ -36,8 +35,12 @@ export interface SystemLinkEdge {
     sendMessage(message: Message<any>): void;
 }
 
+export interface SystemLinkLocalEdge extends SystemLinkEdge{
+    connectTo(other: SystemLinkEdge): void;
+}
+
 export interface ActorSystem<D> extends BindContext<D> {
-    edge: SystemLinkEdge;
+    edge: SystemLinkLocalEdge;
 
     log: Observable<SystemLogEvents>;
 

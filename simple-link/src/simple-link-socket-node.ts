@@ -19,7 +19,7 @@ export function nodeSocketEndPoint(socket: socketIo.Socket): Endpoint {
                 handler({
                     data: deserialize(ev.data)
                 } as any)
-            }
+            };
             handlers.set(handler, wrappedHandler);
             socket.on(type, wrappedHandler);
         },
