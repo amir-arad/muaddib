@@ -25,9 +25,6 @@ export interface MessageAndContext<T extends Serializable> extends MessageContex
 
 export interface ClusterNode {
     connect(input: Observable<ClusterMessage>): Observable<ClusterMessage>;
-
-    name: string;
-    addresses: string[];
 }
 
 export interface System<D> extends BindContext<D>, LocalSystem {

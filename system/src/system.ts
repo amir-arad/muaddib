@@ -1,9 +1,9 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, Address, Message, System, SystemLogEvents} from "./types";
+import {ActorContext, ActorDef, ActorFunction, Address, ClusterNode, Message, System, SystemLogEvents} from "./types";
 import {ActorManager} from "./actor/manager";
 import {ActorContextImpl} from "./actor/context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
-import {SystemClusterNode} from "./cluster";
+import {Postal, SystemClusterNode} from "./cluster";
 
 /**
  * create a no-operation function actor for given actor context
@@ -24,7 +24,7 @@ export class SystemImpl<D> implements System<D> {
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
-    public readonly cluster = new SystemClusterNode(this);
+    public readonly cluster: ClusterNode & Postal = new SystemClusterNode(this);
 
     constructor(public name: string, private container: ResolveContext<D> & BindContext<D>) {
         this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);

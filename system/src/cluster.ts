@@ -1,4 +1,4 @@
-import {Address, Message, ClusterNode} from "./types";
+import {Address, ClusterNode, Message} from "./types";
 import {NextObserver, Observable, Subject} from 'rxjs';
 import {filter, take} from 'rxjs/operators';
 
@@ -56,7 +56,15 @@ interface AddressBookEntry {
     address: Address;
 }
 
-export class SystemClusterNode implements ClusterNode {
+export interface Postal {
+    addAddress(reportingSystemName: string, address: Address): void;
+
+    removeAddress(reportingSystemName: string, address: Address): void;
+
+    sendMessage(message: Message<any>): boolean;
+}
+
+export class SystemClusterNode implements ClusterNode, Postal {
     private addressBook: AddressBookEntry[] = [];
     private channels: { [systemName: string]: NextObserver<SystemMessage> } = {};
     public localInput = new Subject<SystemMessage>();
