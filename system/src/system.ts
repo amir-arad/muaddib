@@ -1,8 +1,8 @@
 import {Subject} from "rxjs";
 import {ActorContext, ActorDef, ActorFunction, Address, Message, System, SystemLogEvents} from "./types";
-import {ActorManager} from "./actor-manager";
-import {ActorContextImpl} from "./actor-context";
-import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
+import {ActorManager} from "./actor/manager";
+import {ActorContextImpl} from "./actor/context";
+import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
 import {NetworkManager} from "./network";
 
 /**

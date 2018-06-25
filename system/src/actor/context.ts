@@ -8,11 +8,10 @@ import {
     Message,
     MessageAndContext,
     Serializable
-} from "./types";
-import {SystemImpl} from "./system";
-import {Container} from "../dependencies/dependencies";
-import {ActorRefImpl} from "./actor-reference";
-import {Quantity} from "../dependencies/types";
+} from "../types";
+import {SystemImpl} from "../system";
+import {Container, Quantity} from "../dependencies";
+import {ActorRefImpl} from "./reference";
 
 export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;

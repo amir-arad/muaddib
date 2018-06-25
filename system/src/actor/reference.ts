@@ -1,6 +1,6 @@
-import {ActorRef, Address, ChildActorRef, MessageAndContext} from "./types";
-import {SystemImpl} from "./system";
-import {ActorContextImpl} from "./actor-context";
+import {ActorRef, Address, ChildActorRef, MessageAndContext} from "../types";
+import {SystemImpl} from "../system";
+import {ActorContextImpl} from "./context";
 
 export class ActorRefImpl<T> implements ChildActorRef<T> {
     private __jobCounter = 0;

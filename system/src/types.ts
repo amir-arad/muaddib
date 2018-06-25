@@ -1,5 +1,5 @@
 import {Observable} from 'rxjs';
-import {BindContext, Index, ResolveContext} from "../dependencies/types";
+import {BindContext, Index, ResolveContext} from "./dependencies";
 import {LinkMessage, LocalSystem} from "./network";
 
 export interface ActorRef<T> {

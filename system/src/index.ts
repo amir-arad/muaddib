@@ -1,9 +1,10 @@
-import {System} from "./actors/types";
-import {SystemImpl} from "./actors/system";
-import {Container} from "./dependencies/dependencies";
+import {System} from "./types";
+import {SystemImpl} from "./system";
+import {Container} from "./dependencies";
 
-export * from './actors/types'
-export * from './dependencies/types'
+export * from './types'
+export {isMessageType, LinkMessage, SystemMessage} from './network'
+export * from './dependencies'
 
 let counter = 0;
 

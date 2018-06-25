@@ -1,5 +1,5 @@
-import {Actor, ActorDef, Address, isActorFactory, isPromiseLike, Message} from "./types";
-import {ActorContextImpl} from "./actor-context";
+import {Actor, ActorDef, Address, isActorFactory, isPromiseLike, Message} from "../types";
+import {ActorContextImpl} from "./context";
 import {flatMap} from 'rxjs/operators';
 import {Subject} from "rxjs";
 

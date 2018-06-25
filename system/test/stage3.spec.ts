@@ -1,8 +1,8 @@
-import {createSystem} from "../src";
+import {createSystem, NetworkNode} from "../src";
 import {expect, plan} from "./testkit/chai.spec";
 import * as computation from './computation';
 import {NextObserver, Observable, Subject} from "rxjs";
-import {isMessageType, LinkMessage, NetworkNode} from "../src/actors/network";
+import {isMessageType, LinkMessage} from "../src/network";
 import {filter, take} from 'rxjs/operators';
 
 function randomDelay() {
