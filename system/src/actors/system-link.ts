@@ -52,9 +52,8 @@ export interface LocalSystem {
 export interface LocalEdge {
     connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void;
 
-    getName(): Promise<string>;
-
-    getAllAddresses(): Promise<Array<Address>>;
+    name: string;
+    addresses: string[];
 }
 
 export interface Medium {
@@ -63,11 +62,6 @@ export interface Medium {
 }
 
 export interface SystemLinkEdge {
-
-    getName(): Promise<string>;
-
-    getAllAddresses(): Promise<Array<Address>>;
-
     onAddAddress(otherSystemName: string, address: Address): void;
 
     onRemoveAddress(otherSystemName: string, address: Address): void;
@@ -87,8 +81,8 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
             if (isMessageType('Handshake', msg)) {
                 channel.input.next({
                     type: 'HandshakeConfirm',
-                    name: await localEdge.getName(),
-                    addresses: await localEdge.getAllAddresses()
+                    name: localEdge.name,
+                    addresses: localEdge.addresses
                 });
                 subscription.unsubscribe();
                 resolve(msg);
@@ -101,8 +95,8 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
     await new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
     channel.input.next({
         type: 'Handshake',
-        name: await localEdge.getName(),
-        addresses: await localEdge.getAllAddresses()
+        name: localEdge.name,
+        addresses: localEdge.addresses
     });
     const msg = await resolution;
     channel.output.subscribe(async (m: LinkMessage) => {
@@ -118,15 +112,21 @@ export async function connect(channel: Medium, localEdge: SystemLinkEdge & Local
     return localEdge.connectTo(msg.name, msg.addresses, channel.input);
 }
 
-export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
-    public input = new Subject<LinkMessage>();
 
-    private addressBook: AddressBook;
+interface AddressBookEntry {
+    edgeName: string;
+    edge: Subject<LinkMessage>;
+    address: Address;
+}
+
+export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
+    private addressBook: AddressBookEntry[] = [];
+    private channels: { [systemName: string]: Subject<LinkMessage> } = {};
+    public localInput = new Subject<LinkMessage>();
 
     constructor(private system: LocalSystem) {
-        this.addressBook = new AddressBook(system.name);
-        this.addressBook.addRemoteSystem(system.name, this.input);
-        this.input.subscribe(async (m: LinkMessage) => {
+        this.addRemoteSystem(system.name, this.localInput);
+        this.localInput.subscribe(async (m: LinkMessage) => {
             if (isMessageType('AddAddress', m)) {
                 this.onAddAddress(system.name, m.address);
             } else if (isMessageType('RemoveAddress', m)) {
@@ -134,30 +134,25 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
             } else if (isMessageType('SendMessage', m)) {
                 this.system.sendLocalMessage(m.message);
             }
-        })
+        });
     }
 
-    get name(): string {
-        return this.system.name;
-    }
-
-    get addresses(): string[] {
-        return this.addressBook.getAllAddresses();
-    }
-
-    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void {
-        this.addressBook.addRemoteSystem(name, input);
-        addresses.forEach(a => this.onAddAddress(name, a));
-    }
-
-    // TODO: change to property that is transfered with the object
-    getName = (): Promise<string> => {
-        return Promise.resolve(this.system.name);
+    onAddAddress = (reportingSystemName: string, address: Address) => {
+        this.addressBook.push({edgeName: reportingSystemName, edge: this.channels[reportingSystemName], address});
+        Object.keys(this.channels).forEach(reportTo => {
+            if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
+                this.channels[reportTo].next({type: 'AddAddress', address});
+            }
+        });
     };
 
-    // TODO: change to property that is transfered with the object
-    getAllAddresses = (): Promise<Array<Address>> => {
-        return Promise.resolve(this.addressBook.getAllAddresses());
+    onRemoveAddress = (reportingSystemName: string, address: Address) => {
+        this.addressBook = this.addressBook.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
+        Object.keys(this.channels).forEach(reportTo => {
+            if (reportTo !== reportingSystemName && reportTo !== this.system.name) {
+                this.channels[reportTo].next({type: 'RemoveAddress', address});
+            }
+        });
     };
 
     sendMessage = (message: Message<any>): boolean => {
@@ -171,63 +166,26 @@ export class SystemLinksManager implements SystemLinkEdge, LocalEdge {
         }
     };
 
-    onAddAddress = (otherSystemName: string, address: Address): void => {
-        this.addressBook.addAddress(otherSystemName, address);
-    };
-
-    onRemoveAddress = (otherSystemName: string, address: Address): void => {
-        this.addressBook.removeAddress(otherSystemName, address);
-    };
-
-    getEdgeByAddress(address: Address): Subject<LinkMessage> | undefined {
-        return this.addressBook.getEdgeByAddress(address);
-    }
-}
-
-interface AddressBookEntry {
-    edgeName: string;
-    edge: Subject<LinkMessage>;
-    address: Address;
-}
-/**
- * manage all addresses known to a system
- */
-class AddressBook {
-    private entries: AddressBookEntry[] = [];
-    private otherEdges: { [systemName: string]: Subject<LinkMessage> } = {};
-
-    constructor(private localName: string) {
-    }
-
-    getAllAddresses() {
-        return Array.from(new Set(this.entries.map(e => e.address)))
-    }
-
-    addAddress(reportingSystemName: string, address: Address) {
-        this.entries.push({edgeName: reportingSystemName, edge: this.otherEdges[reportingSystemName], address});
-        Object.keys(this.otherEdges).forEach(reportTo => {
-            if (reportTo !== reportingSystemName && reportTo !== this.localName) {
-                this.otherEdges[reportTo].next({type: 'AddAddress', address});
-            }
-        });
-    }
-
-    removeAddress(reportingSystemName: string, address: Address) {
-        this.entries = this.entries.filter(e => e.address !== address || e.edgeName !== reportingSystemName);
-        Object.keys(this.otherEdges).forEach(reportTo => {
-            if (reportTo !== reportingSystemName && reportTo !== this.localName) {
-                this.otherEdges[reportTo].next({type: 'RemoveAddress', address});
-            }
-        });
-    }
-
     addRemoteSystem(systemName: string, remoteSystem: Subject<LinkMessage>) {
-        this.otherEdges[systemName] = remoteSystem;
+        this.channels[systemName] = remoteSystem;
     }
 
     getEdgeByAddress(address: Address) {
         // todo: sort by distance
-        const entry = this.entries.find(e => e.address === address);
+        const entry = this.addressBook.find(e => e.address === address);
         return entry && entry.edge;
+    }
+
+    get name(): string {
+        return this.system.name;
+    }
+
+    get addresses(): string[] {
+        return Array.from(new Set(this.addressBook.map(e => e.address)))
+    }
+
+    connectTo(name: string, addresses: string[], input: Subject<LinkMessage>): void {
+        this.addRemoteSystem(name, input);
+        addresses.forEach(a => this.onAddAddress(name, a));
     }
 }
