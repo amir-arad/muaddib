@@ -1,4 +1,4 @@
-import {Address, ClusterNode, Message} from "./types";
+import {Address, Message} from "./types";
 import {NextObserver, Observable, Subject} from 'rxjs';
 import {filter, take} from 'rxjs/operators';
 
@@ -68,6 +68,9 @@ export interface Postal {
     removeAddress(address: Address): void;
 
     sendMessage(message: Message<any>): boolean;
+}
+export interface ClusterNode {
+    connect(input: Observable<ClusterMessage>): Observable<ClusterMessage>;
 }
 
 export class SystemClusterNode implements ClusterNode, Postal {
