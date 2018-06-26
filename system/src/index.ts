@@ -16,5 +16,5 @@ export * from "./actor/definition";
 export {ActorContext, MessageContext, MessageAndContext} from "./actor/context";
 export {ActorRef, ChildActorRef} from "./actor/reference";
 
-export {isMessageType, ClusterMessage, SystemMessage} from './cluster'
+export {isMessageType, ClusterMessage, SystemMessage, ClusterNode} from './cluster'
 export * from './dependencies'

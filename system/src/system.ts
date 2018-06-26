@@ -1,10 +1,10 @@
 import {Subject} from "rxjs";
 import {SystemLogEvents} from "./log-events";
-import {Address, ClusterNode, Message, System} from "./types";
+import {Address, Message, System} from "./types";
 import {ActorManager} from "./actor/manager";
 import {ActorContext, ActorContextImpl} from "./actor/context";
 import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
-import {Postal, SystemClusterNode} from "./cluster";
+import {ClusterNode, Postal, SystemClusterNode} from "./cluster";
 import {ActorDef, ActorFunction} from "./actor/definition";
 
 /**
