@@ -1,5 +1,5 @@
 import {createSystem, Quantity} from "../src";
-import {expect, plan} from "./testkit/chai.spec";
+import {expect, plan} from "test-kit";
 import {Actor, Context, messages, Operation, opSymbol} from './computation'
 
 function randomDelay() {

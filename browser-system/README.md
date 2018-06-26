@@ -1,10 +1,9 @@
 # muadib system
 
-fullstack plugins framework
+browser tools and plugins for system
 
 ### project features
- - load plugins and have them all find and communicate with each other
- - plugins as prototype and singleton
+ - browser-related features for the muadib-system
 
 ## developer documentation
 how to build and test:
@@ -14,4 +13,4 @@ how to build and test:
 
 how to debug (browser):
  - run `npm start` to run a development server
- - open `http://localhost:8081/test.bundle` to run live tests that will update while you change the source code
+ - open `http://localhost:8082/test.bundle` to run live tests that will update while you change the source code

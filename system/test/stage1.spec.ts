@@ -1,4 +1,4 @@
-import {expect, plan} from "./testkit/chai.spec";
+import {expect, plan} from "test-kit";
 import {ActorContext, ActorObject, ActorRef, createSystem, MessageAndContext} from "../src";
 
 function randomDelay() {

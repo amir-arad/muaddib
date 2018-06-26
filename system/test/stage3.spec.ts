@@ -1,5 +1,5 @@
 import {ClusterMessage, ClusterNode, createSystem, isMessageType} from "../src";
-import {expect, plan} from "./testkit/chai.spec";
+import {expect, plan} from "test-kit";
 import * as computation from './computation';
 import {merge, Subject} from "rxjs";
 import {filter, take} from 'rxjs/operators';
