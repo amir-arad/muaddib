@@ -6,7 +6,8 @@
     "packages": [
       "test-kit",
       "simple-link",
-      "system"
+      "system",
+      "browser-system"
     ],
     "nohoist" : [
       "**/@types/socket.io*", "**/@types/socket.io*/**", "**/@types/node"
