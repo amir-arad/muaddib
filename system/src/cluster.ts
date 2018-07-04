@@ -1,6 +1,6 @@
 import {Address, Message} from "./types";
-import {NextObserver, Observable, Subject} from 'rxjs';
-import {filter, take} from 'rxjs/operators';
+import {NextObserver, Observable, Subject, merge} from 'rxjs';
+import {filter, take, mapTo} from 'rxjs/operators';
 
 export interface Handshake {
     type: 'Handshake';
@@ -63,20 +63,28 @@ interface RoutingOption {
 }
 
 export interface Postal {
+    waitForAddress(address: Address): Promise<void>;
+
     addAddress(address: Address): void;
 
     removeAddress(address: Address): void;
 
     sendMessage(message: Message<any>): boolean;
 }
+
 export interface ClusterNode {
     connect(input: Observable<ClusterMessage>): Observable<ClusterMessage>;
+}
+
+export function waitForHandshake(stream1: Observable<ClusterMessage>, stream2: Observable<ClusterMessage>): Promise<void> {
+    return merge(stream1, stream2).pipe(filter(m => isMessageType('HandshakeConfirm', m)), take(1), mapTo(undefined)).toPromise();
 }
 
 export class SystemClusterNode implements ClusterNode, Postal {
     private routingEntries: RoutingEntry[] = [];
     private routingTable: { [address: string]: RoutingEntry } = {};
     private nodes: { [nodeId: string]: NextObserver<SystemMessage> } = {};
+    private newAddresses = new Subject<Address>();
     public localInput = new Subject<SystemMessage>();
 
     constructor(private system: LocalSystem) {
@@ -166,6 +174,14 @@ export class SystemClusterNode implements ClusterNode, Postal {
         });
     }
 
+    waitForAddress(address: Address): Promise<void> {
+        if (this.routingTable[address]){
+            return Promise.resolve();
+        } else {
+            return this.newAddresses.pipe(filter(newAddress => newAddress === address), take(1), mapTo(undefined)).toPromise();
+        }
+    }
+
     addAddress(address: Address, route?: string[], distance = 0) {
         const nodeId = route ? route[route.length - 1] : this.system.id;
         route = route ? route.concat(this.system.id) : [this.system.id];
@@ -175,6 +191,7 @@ export class SystemClusterNode implements ClusterNode, Postal {
         if (!routingEntry || routingEntry.distance > distance) {
             this.routingTable[address] = newEntry;
         }
+        this.newAddresses.next(address);
         this.broadcast({type: 'AddAddress', address, route});
     };
 

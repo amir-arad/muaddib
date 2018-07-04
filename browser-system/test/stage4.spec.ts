@@ -1,6 +1,7 @@
 import {expect, plan} from "test-kit";
-import {ActorContext, ActorObject, ActorRef, createSystem, MessageAndContext, ActorDef} from "system";
-import {FramesManager} from "../src";
+import {ActorContext, ActorDef, ActorObject, ActorRef, createSystem, MessageAndContext, System} from "system";
+import {mainConnectToIframe, loadIframeScript} from "../src";
+import {Sampler} from "./sampler";
 
 declare global {
     interface Window {
@@ -9,56 +10,26 @@ declare global {
 }
 
 describe('system', () => {
-    describe('stage 1 - single vm, shallow plugins demo app', () => {
-        it('load two plugins and have them all find and communicate with each other', plan(2, async () => {
-            interface Test {
-                type: 'Test';
-            }
+    describe('stage 4 - iframes', () => {
+        it('wtf', plan(2, async () => {
             interface Sample {
                 type: 'Sample';
                 value: Window['__testValue'];
             }
-
-            class Sampler implements ActorObject<Test> {
-                static address = 'sampler';
-
-                constructor(private ctx: ActorContext<Test, {}>) {
-                    window.__testValue = 'foo';
-                }
-
-                onReceive(msg: Test) {
-                    if (msg.type === 'Test' && this.ctx.replyTo) {
-                        this.ctx.replyTo.send({type: 'Sample', value: window.__testValue});
-                    } else {
-                        this.ctx.unhandled();
-                    }
-                }
-            }
-
-            const system = createSystem();
+            const system = createSystem('main');
             // system.log.subscribe(m => console.log(JSON.stringify(m)));
+
+            loadIframeScript(
+                window.location.origin + '/test-frame.bundle.js',
+                (iframeWindow) => mainConnectToIframe(system, iframeWindow)
+            );
+
             await system.run(async ctx => {
-                const frames = ctx.actorOf(FramesManager);
-                // TODO: create iframe, send iframe selector to actor, actor only bootstraps system in the iframe
-                // Tell the 'greeter' to change its 'greeting' message
-                frames.send({
-                    type: 'MakeNewFrame',
-                    systemId : 'frame1',
-                    title : 'frame1',
-                    parent : '#frameContainer',
-                    script: async ctx => {
-                        window.__testValue = 'foo';
-                        ctx.actorOf(Sampler);
-                    }
-                });
-
-                // TODO: synch with loading. add timeout to ctx.actorFor?
-                const sampler = ctx.actorFor(Sampler.address);
-
-                // Ask the 'greeter for the latest 'greeting' and catch the next message that will arrive at the mailbox
+                const sampler = await ctx.actorWaitFor(Sampler.address);
                 let message = await sampler.ask({type: 'Test'});
                 expect(message.body.value, 'sample from iframe window').to.eql('foo');
                 expect(window.__testValue, 'sample from current window').to.not.eql('foo');
+
             }, 'testCase');
         }));
     });

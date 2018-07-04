@@ -1,10 +1,12 @@
-import {Address, ExecutionContext, Message, Serializable} from "../types";
+import {Address, ExecutionContext, Message, Serializable, System} from "../types";
 import {SystemImpl} from "../system";
 import {Container, Quantity} from "../dependencies";
 import {ActorRef, ActorRefImpl, ChildActorRef} from "./reference";
 import {ActorDef} from "./definition";
+import {timeout} from "../timeout";
 
 export interface ActorContext<T, D> extends MessageContext, ExecutionContext<D> {
+    system: System<D>;
     self: ActorRef<T>;
     stop(): void;
 }
@@ -25,7 +27,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
 
-    constructor(private readonly system: SystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
+    constructor(public readonly system: SystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
         this.self = this.makeBoundReference(this.address);
     }
 
@@ -72,6 +74,11 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
 
     actorFor(addr: Address): ActorRef<any> {
         return this.makeBoundReference(addr);
+    }
+
+    async actorWaitFor(addr: Address, options?: { timeout: number }): Promise<ActorRef<any>> {
+        await timeout(options && options.timeout || 1000, 'waiting for actor timed out : ' + addr, this.system.cluster.waitForAddress(addr));
+        return this.actorFor(addr);
     }
 
     unhandled(): void {

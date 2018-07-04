@@ -1,6 +1,7 @@
 import {Address} from "../types";
 import {SystemImpl} from "../system";
 import {ActorContextImpl, MessageAndContext} from "./context";
+import {timeout} from "../timeout";
 
 export interface ActorRef<T> {
     address: Address;
@@ -32,18 +33,10 @@ export class ActorRefImpl<T> implements ChildActorRef<T> {
         // make an actor definition that will receive the reply
         const replyActorDef = this.ctx.makeReplyActor(this.ctx.address + '/asking:' + this.address + '/' + (options && options.id || this.__jobCounter++));
         const replyActorRef = this.ctx.actorOf(replyActorDef);
-        const timeoutPromise = new Promise((resolve) => {
-            setTimeout(resolve, options && options.timeout || 1000)
-        }).then(() => {
-            throw new Error('request timed out : ' + JSON.stringify(body));
-        });
         try {
             // send the request with custom replyTo
             this.system.sendMessage({to: this.address, body, replyTo: replyActorRef.address});
-            return await Promise.race([
-                replyActorDef.reply,
-                timeoutPromise
-            ]);
+            return await timeout(options && options.timeout || 1000, ()=> 'request timed out : ' + JSON.stringify(body), replyActorDef.reply);
         } finally {
             replyActorRef.stop();
         }

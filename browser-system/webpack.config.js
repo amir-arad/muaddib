@@ -10,7 +10,8 @@ module.exports = {
     mode: 'development',
     devtool: 'eval',
     entry: {
-        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`))
+        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`)),
+        'test-frame': [path.join(__dirname, 'dist', 'test', 'test-frame-loader.js')]
     },
     output: {
         path: distPath,

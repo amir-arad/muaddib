@@ -35,6 +35,8 @@ export interface ExecutionContext<D> extends ResolveContext<D> {
     actorOf<P, M1>(ctor: ActorDef<P, M1, D>, props: P): ChildActorRef<M1>;
 
     actorFor(addr: Address): ActorRef<any>;
+
+    actorWaitFor(addr: Address, options?: { timeout: number }): Promise<ActorRef<any>>;
 }
 
 export function isPromiseLike(subj: any): subj is PromiseLike<any> {
