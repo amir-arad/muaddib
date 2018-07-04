@@ -41,8 +41,9 @@ export function mainConnectToIframe(system: System<any>, iframeWindow: Window) {
  * @param {string} scriptUrl absolute URL of the script to load
  * @param {(iframeWindow: Window) => any} onLoad callback to when the window is loaded
  */
-export function loadIframeScript(scriptUrl: string, onLoad: (iframeWindow: Window) => any) {
-    const blob = new Blob([`<!DOCTYPE html>
+export function loadIframeScript(scriptUrl: string): Promise<Window> {
+    return new Promise<Window>(resolve => {
+        const blob = new Blob([`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -54,16 +55,17 @@ export function loadIframeScript(scriptUrl: string, onLoad: (iframeWindow: Windo
 <body style="display: block; margin: 0;" >
 </body>
 </html>`], {type: "text/html"});
-    const magicBlob = URL.createObjectURL(blob);
-    const iframe = document.createElement("iframe");
-    iframe.src = magicBlob;
-    document.body.insertBefore(iframe, document.body.firstChild);
+        const magicBlob = URL.createObjectURL(blob);
+        const iframe = document.createElement("iframe");
+        iframe.src = magicBlob;
+        document.body.insertBefore(iframe, document.body.firstChild);
 
-    iframe.addEventListener("load", function () {
-        const iframeWindow = iframe.contentWindow;
-        if (!iframeWindow) {
-            throw new Error('what no window');
-        }
-        onLoad(iframeWindow);
+        iframe.addEventListener("load", function () {
+            const iframeWindow = iframe.contentWindow;
+            if (!iframeWindow) {
+                throw new Error('what no window');
+            }
+            resolve(iframeWindow);
+        });
     });
 }

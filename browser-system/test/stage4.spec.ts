@@ -19,10 +19,8 @@ describe('system', () => {
             const system = createSystem('main');
             // system.log.subscribe(m => console.log(JSON.stringify(m)));
 
-            loadIframeScript(
-                window.location.origin + '/test-frame.bundle.js',
-                (iframeWindow) => mainConnectToIframe(system, iframeWindow)
-            );
+            const iframeWindow = await loadIframeScript(window.location.origin + '/test-frame.bundle.js');
+            mainConnectToIframe(system, iframeWindow);
 
             await system.run(async ctx => {
                 const sampler = await ctx.actorWaitFor(Sampler.address);
