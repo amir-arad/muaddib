@@ -10,7 +10,8 @@ module.exports = {
     mode: 'development',
     devtool: 'eval',
     entry: {
-        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`))
+        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`)),
+        "test-plugins": './test/fixtures/chat-room-feature'
     },
     output: {
         path: distPath,
