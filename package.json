@@ -7,8 +7,10 @@
       "simple-link",
       "system"
     ],
-    "nohoist" : [
-      "**/@types/socket.io*", "**/@types/socket.io*/**", "**/@types/node"
+    "nohoist": [
+      "**/@types/socket.io*",
+      "**/@types/socket.io*/**",
+      "**/@types/node"
     ]
   },
   "scripts": {
@@ -20,8 +22,8 @@
     "start": "node server"
   },
   "devDependencies": {
-    "@types/chai-as-promised": "^7.1.0",
     "@types/chai": "~4.1.2",
+    "@types/chai-as-promised": "^7.1.0",
     "@types/mocha": "~5.2.0",
     "@types/sinon": "~4.3.0",
     "@types/sinon-chai": "~2.7.28",
