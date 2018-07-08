@@ -11,7 +11,7 @@ declare global {
 
 describe('system', () => {
     describe('stage 4 - iframes', () => {
-        it('wtf', plan(2, async () => {
+        it('communicate well on diffeseent window objects', plan(2, async () => {
             interface Sample {
                 type: 'Sample';
                 value: Window['__testValue'];
