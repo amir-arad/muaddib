@@ -9,7 +9,7 @@ function randomDelay() {
 
 
 describe('system', () => {
-    describe('stage 3 - multiple "vms"', () => {
+    describe('stage 3 - multiple "vms" (cluster)', () => {
 
         /**
          *  same scenario as stage2 spec, only over cluster connection

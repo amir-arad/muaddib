@@ -40,8 +40,8 @@ export type MessageTypeMap = {
     HandshakeConfirm: HandshakeConfirm
 }
 
-export type ClusterMessage = SystemMessage | Handshake | HandshakeConfirm;
 export type SystemMessage = SendMessage | AddAddress | RemoveAddress;
+export type ClusterMessage = SystemMessage | Handshake | HandshakeConfirm;
 
 export function isMessageType<T extends keyof MessageTypeMap>(t: T, m: ClusterMessage): m is MessageTypeMap[T] {
     return m.type === t;
@@ -189,6 +189,7 @@ export class SystemClusterNode implements ClusterNode, Postal {
         this.routingEntries.push(newEntry);
         const routingEntry = this.routingTable[address];
         if (!routingEntry || routingEntry.distance > distance) {
+            // TODO: report route distance change
             this.routingTable[address] = newEntry;
         }
         this.newAddresses.next(address);
@@ -204,12 +205,13 @@ export class SystemClusterNode implements ClusterNode, Postal {
             // look for the new shortest distance to the address
             const bestRoute = this.routingEntries.filter(e => e.address === address).sort((e1, e2) => e2.distance - e1.distance).pop();
             if (bestRoute) {
+                // TODO: report route distance change
                 this.routingTable[address] = bestRoute;
             } else {
+                this.broadcast({type: 'RemoveAddress', address, route});
                 delete this.routingTable[address];
             }
         }
-        this.broadcast({type: 'RemoveAddress', address, route});
     };
 
     sendMessage(message: Message<any>, route?: string[]): boolean {
