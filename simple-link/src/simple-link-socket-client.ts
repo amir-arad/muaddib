@@ -1,34 +1,34 @@
 import 'socket.io-client';
-import { Endpoint } from './index';
-import { serialize, deserialize } from './serializer';
-import {Serializable} from "./serializeable";
+import {deserialize, serialize} from './serializer';
+import {Endpoint} from "./endpoint";
+import {Message} from "./message";
 
-export function socketEndpoint(socket : SocketIOClient.Socket): Endpoint {
-    const handlers:Map<Function,Function> = new Map();
+export function socketEndpoint(socket: SocketIOClient.Socket): Endpoint {
+    const handlers: Map<Function, Function> = new Map();
     return {
-        addEventListener:(type:'message',handler:(ev:MessageEvent)=>void)=>{
-            if(handlers.has(handler)){
+        addEventListener: (type: 'message', handler: (ev: MessageEvent) => void) => {
+            if (handlers.has(handler)) {
                 return;
             }
-            const wrappedHandler = (ev:MessageEvent)=>{
+            const wrappedHandler = (ev: MessageEvent) => {
                 handler({
-                    data:deserialize(ev.data)
+                    data: deserialize(ev.data)
                 } as any)
-            }
-            handlers.set(handler,wrappedHandler);
-            socket.on(type,wrappedHandler);
+            };
+            handlers.set(handler, wrappedHandler);
+            socket.on(type, wrappedHandler);
         },
 
-        removeEventListener:(type:'message',handler:(ev:MessageEvent)=>void)=>{
-            if(handlers.has(handler)){
-                return socket.off(type,handlers.get(handler));
+        removeEventListener: (type: 'message', handler: (ev: MessageEvent) => void) => {
+            if (handlers.has(handler)) {
+                return socket.off(type, handlers.get(handler));
             }
 
         },
-        postMessage: (message: Serializable) => {
+        postMessage: (message: Message) => {
             socket.emit('message', {
-                type:'message',
-                data:serialize(message)
+                type: 'message',
+                data: serialize(message)
             });
         },
     } as Endpoint;

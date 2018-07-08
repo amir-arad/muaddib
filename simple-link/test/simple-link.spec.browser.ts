@@ -3,14 +3,13 @@ import {
     ConnectionConfig,
     disposeAllConnections,
     disposeConnection,
-    ExposableAPI,
     replaceLocalApi,
     replaceRemoteApi
 } from '../src';
 import {expect} from 'chai';
 import {delay} from './utils';
 
-interface API extends ExposableAPI {
+interface API {
     echo: (data: string) => Promise<string>
 }
 
@@ -203,7 +202,7 @@ describe('simple-link', function () {
 
             replaceLocalApi<API>('side1', 'side2', (hijacked: API) => {
                 return <API>{
-                    echo: (text: string) => hijacked.echo(text).then((echo: string) => echo += '!')
+                    echo: (text: string) => hijacked.echo(text).then((echo: string) => echo + '!')
                 }
             });
 

@@ -1,6 +1,5 @@
-import {expect, plan} from "./testkit/chai.spec";
-import {ActorContext, ActorRef, createActorSystem} from "../src";
-import {ActorObject, MessageAndContext} from "../src";
+import {expect, plan} from "test-kit";
+import {ActorContext, ActorObject, ActorRef, createSystem, MessageAndContext} from "../src";
 
 function randomDelay() {
     return new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 45));
@@ -39,7 +38,7 @@ describe('system', () => {
                 }
             }
 
-            const system = createActorSystem();
+            const system = createSystem();
             // system.log.subscribe(m => console.log(JSON.stringify(m)));
             await system.run(async ctx => {
 
@@ -140,7 +139,7 @@ describe('system', () => {
             }
 
             it('Account demo : ordered, serial execution per actor', plan(2, async () => {
-                const system = createActorSystem();
+                const system = createSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
                 await system.run(async ctx => {
                     const alice = ctx.actorOf(Account, {id: 'alice', balance: 0});
@@ -223,7 +222,7 @@ describe('system', () => {
                     }
                 }
 
-                const system = createActorSystem();
+                const system = createSystem();
                 // system.log.subscribe(m => console.log(JSON.stringify(m)));
                 await system.run(async ctx => {
                     const bank = ctx.actorOf(Bank);

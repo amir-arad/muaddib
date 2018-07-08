@@ -4,17 +4,20 @@
   "private": true,
   "workspaces": {
     "packages": [
+      "test-kit",
       "simple-link",
-      "system"
+      "system",
+      "browser-system"
     ],
     "nohoist" : [
       "**/@types/socket.io*", "**/@types/socket.io*/**", "**/@types/node"
     ]
   },
   "scripts": {
-    "reset": "yarn clean && rimraf node_modules && yarn install && yarn test",
+    "reset": "yarn clean && lerna clean && rimraf node_modules && yarn install && yarn test",
     "clean": "lerna run clean --stream",
     "build": "lerna run build --stream",
+    "pretest": "run-s clean build",
     "test": "lerna run test --stream",
     "start": "node server"
   },

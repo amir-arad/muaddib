@@ -1,17 +1,24 @@
-import {
-    ActorContext,
-    ActorDef,
-    ActorRef,
-    Address,
-    ChildActorRef,
-    Message,
-    MessageAndContext,
-    Serializable
-} from "./types";
-import {ActorSystemImpl} from "./actor-system";
-import {Container} from "../dependencies/dependencies";
-import {ActorRefImpl} from "./actor-reference";
-import {Quantity} from "../dependencies/types";
+import {Address, ExecutionContext, Message, Serializable, System} from "../types";
+import {SystemImpl} from "../system";
+import {Container, Quantity} from "../dependencies";
+import {ActorRef, ActorRefImpl, ChildActorRef} from "./reference";
+import {ActorDef} from "./definition";
+import {timeout} from "../timeout";
+
+export interface ActorContext<T, D> extends MessageContext, ExecutionContext<D> {
+    system: System<D>;
+    self: ActorRef<T>;
+    stop(): void;
+}
+
+export interface MessageContext {
+    unhandled: () => void;
+    replyTo?: ActorRef<any>;
+}
+
+export interface MessageAndContext<T extends Serializable> extends MessageContext {
+    body: T;
+}
 
 export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     private __message?: Message<M>;
@@ -20,7 +27,7 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     public replyTo?: ActorRef<any>;
     public readonly self: ActorRef<M>;
 
-    constructor(private readonly system: ActorSystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
+    constructor(public readonly system: SystemImpl<any>, private readonly definition: ActorDef<any, M, D>, readonly address: Address, private readonly getImpl: Container<D>['get']) {
         this.self = this.makeBoundReference(this.address);
     }
 
@@ -31,16 +38,28 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
     async get<P extends keyof D>(key: P, quantity: Quantity = Quantity.any): Promise<null | D[P] | Array<D[P]>> {
         try {
             const result = await this.getImpl(key, quantity as any);
-            const resultSize = result === null ? 0 : Array.isArray(result)? result.length : 1;
-            this.system.log.next({type: 'ProvisioningSupplied', consumer: this.address, key : key.toString(), resultSize : resultSize, quantity : Quantity[quantity]});
+            const resultSize = result === null ? 0 : Array.isArray(result) ? result.length : 1;
+            this.system.log.next({
+                type: 'ProvisioningSupplied',
+                consumer: this.address,
+                key: key.toString(),
+                resultSize: resultSize,
+                quantity: Quantity[quantity]
+            });
             return result;
         } catch (errorObj) {
-            this.system.log.next({type: 'ProvisioningSupplyError', consumer: this.address, key : key.toString(), quantity : Quantity[quantity], error: errorObj.message});
+            this.system.log.next({
+                type: 'ProvisioningSupplyError',
+                consumer: this.address,
+                key: key.toString(),
+                quantity: Quantity[quantity],
+                error: errorObj.message
+            });
             throw errorObj;
         }
     }
 
-    async run(script: (ctx: ActorContext<never, D>) => any, address: Address = '' + this.__jobCounter++): Promise<void> {
+    async run(script: (ctx: ExecutionContext<D>) => any, address: Address = '' + this.__jobCounter++): Promise<void> {
         const newContext = new ActorContextImpl<never, D>(this.system, this.definition as any, this.address + '/run:' + address, this.getImpl);
         await script(newContext);
     }
@@ -49,12 +68,17 @@ export class ActorContextImpl<M, D> implements ActorContext<M, D> {
         this.system.log.next({type: 'LogEvent', source: this.address, message: args})
     }
 
-    actorOf<P, M>(ctor: ActorDef<P, M, D>, props?: P): ChildActorRef<M> {
-        return this.makeBoundReference(this.system.createActor<P, M>(ctor, props as P));
+    actorOf<P, M1>(ctor: ActorDef<P, M1, D>, props?: P): ChildActorRef<M1> {
+        return this.makeBoundReference(this.system.createActor<P, M1>(ctor, props as P));
     }
 
     actorFor(addr: Address): ActorRef<any> {
         return this.makeBoundReference(addr);
+    }
+
+    async actorWaitFor(addr: Address, options?: { timeout: number }): Promise<ActorRef<any>> {
+        await timeout(options && options.timeout || 1000, 'waiting for actor timed out : ' + addr, this.system.cluster.waitForAddress(addr));
+        return this.actorFor(addr);
     }
 
     unhandled(): void {

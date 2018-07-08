@@ -1,6 +1,7 @@
 const path = require('path');
 const glob = require("glob");
-const testFiles = glob.sync('./dist/test/**/*.spec.browser.js?(x)');
+const {testGlob} = require('./package.json');
+const testFiles = glob.sync(testGlob);
 
 const distPath = path.join(__dirname, 'dist');
 
@@ -9,7 +10,8 @@ module.exports = {
     mode: 'development',
     devtool: 'eval',
     entry: {
-        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`))
+        test: testsSetup.concat(testFiles.map(fileName => `mocha-loader!${fileName}`)),
+        'test-frame': [path.join(__dirname, 'dist', 'test', 'test-frame-loader.js')]
     },
     output: {
         path: distPath,

@@ -1,9 +1,11 @@
 import {Subject} from "rxjs";
-import {ActorContext, ActorDef, ActorFunction, ActorSystem, Address, Message, SystemLogEvents} from "./types";
-import {ActorManager} from "./actor-manager";
-import {ActorContextImpl} from "./actor-context";
-import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "../dependencies/types";
-import {Container} from "../dependencies/dependencies";
+import {SystemLogEvents} from "./log-events";
+import {Address, Message, System} from "./types";
+import {ActorManager} from "./actor/manager";
+import {ActorContext, ActorContextImpl} from "./actor/context";
+import {AnyProvisioning, BindContext, ProvisioningPath, ResolveContext} from "./dependencies";
+import {ClusterNode, Postal, SystemClusterNode} from "./cluster";
+import {ActorDef, ActorFunction} from "./actor/definition";
 
 /**
  * create a no-operation function actor for given actor context
@@ -19,16 +21,15 @@ const rootActorDefinition: ActorDef<any, any, any> = {
 };
 
 // TODO : supervision
-export class ActorSystemImpl<D> implements ActorSystem<D> {
-    private localActors: { [a: string]: ActorManager<any, any> } = {};
+export class SystemImpl<D> implements System<D> {
+    public localActors: { [a: string]: ActorManager<any, any> } = {};
     private readonly rootContext: ActorContextImpl<never, D>;
     public readonly run: ActorContextImpl<never, D>['run'];
     public readonly log = new Subject<SystemLogEvents>();
-    private boundGet: Container<D>['get'];
+    public readonly cluster: ClusterNode & Postal = new SystemClusterNode(this);
 
-    constructor(private container: ResolveContext<D> & BindContext<D>) {
-        this.boundGet = container.get.bind(container);
-        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.boundGet);
+    constructor(public id: string, private container: ResolveContext<D> & BindContext<D>) {
+        this.rootContext = new ActorContextImpl<never, D>(this, rootActorDefinition, 'root', this.container.get);
         this.run = this.rootContext.run.bind(this.rootContext);
     }
 
@@ -37,23 +38,42 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         return this.container.set(provisioning as any);
     }
 
+    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P) {
+        const newAddress = this.makeNewAddress(ctor, props);
+        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.container.get);
+        this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
+        this.cluster.addAddress(newAddress);
+        this.log.next({type: 'ActorCreated', address: newAddress});
+        return newAddress;
+    }
+
     stopActor(address: Address) {
         const actorMgr = this.localActors[address];
         if (actorMgr) {
             this.log.next({type: 'ActorDestroyed', address});
             actorMgr.stop();
+            this.cluster.removeAddress(address);
             delete this.localActors[address];
         }
     }
 
-    sendMessage(message: Message<any>) {
-        this.log.next({type: 'MessageSent', message});
+    sendLocalMessage(message: Message<any>) {
+        // if the message is for a local actor, send it directly
         const localRecepient = this.localActors[message.to];
         if (localRecepient) {
             localRecepient.sendMessage(message);
         } else {
             this.log.next({type: 'UndeliveredMessage', message});
-            console.error(new Error(`unknown address "${message.to}"`).stack);
+            console.error(new Error(`unknown local address "${message.to}"`).stack);
+        }
+    }
+
+    sendMessage(message: Message<any>) {
+        this.log.next({type: 'MessageSent', message});
+        // look for another system to send the message to
+        if (!this.cluster.sendMessage(message)) {
+            this.log.next({type: 'UndeliveredMessage', message});
+            console.error(new Error(`unknown global address "${message.to}"`).stack);
         }
     }
 
@@ -69,14 +89,6 @@ export class ActorSystemImpl<D> implements ActorSystem<D> {
         if (this.localActors[newAddress]) {
             throw new Error(`an actor is already registered under ${newAddress}`)
         }
-        return newAddress;
-    }
-
-    createActor<P, M>(ctor: ActorDef<P, M, D>, props: P) {
-        const newAddress = this.makeNewAddress(ctor, props);
-        const newContext = new ActorContextImpl<M, D>(this, ctor, newAddress, this.boundGet);
-        this.localActors[newAddress] = new ActorManager<P, M>(newContext, ctor, newAddress, props);
-        this.log.next({type: 'ActorCreated', address: newAddress});
         return newAddress;
     }
 

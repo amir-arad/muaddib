@@ -1,11 +1,20 @@
-import {ActorSystem} from "./actors/types";
-import {ActorSystemImpl} from "./actors/actor-system";
-import {Container} from "./dependencies/dependencies";
+import {System} from "./types";
+import {SystemImpl} from "./system";
+import {Container} from "./dependencies";
+import {ChildActorRef} from "./actor/reference";
+import {MessageContext} from "./actor/context";
 
-export * from './actors/types'
-export * from './dependencies/types'
+let counter = 0;
 
-
-export function createActorSystem<D>(container: Container<D> = new Container()): ActorSystem<D> {
-    return new ActorSystemImpl<D>(container);
+export function createSystem<D>(id: string = 'System:' + (counter++), container: Container<D> = new Container()): System<D> {
+    return new SystemImpl<D>(id, container);
 }
+
+export * from './log-events'
+export * from './types'
+export * from "./actor/definition";
+export {ActorContext, MessageContext, MessageAndContext} from "./actor/context";
+export {ActorRef, ChildActorRef} from "./actor/reference";
+
+export {isMessageType, ClusterMessage, SystemMessage, ClusterNode, waitForHandshake} from './cluster'
+export * from './dependencies'

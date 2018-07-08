@@ -1,7 +1,8 @@
-import {Actor, ActorDef, Address, isActorFactory, isPromiseLike, Message} from "./types";
-import {ActorContextImpl} from "./actor-context";
+import {Address, isPromiseLike, Message} from "../types";
+import {ActorContextImpl} from "./context";
 import {flatMap} from 'rxjs/operators';
 import {Subject} from "rxjs";
+import {Actor, ActorDef, isActorFactory} from "./definition";
 
 const emptyArr: any[] = [];
 
